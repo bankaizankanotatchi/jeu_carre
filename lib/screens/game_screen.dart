@@ -21,11 +21,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   String currentPlayer = 'bleu';
   Map<String, int> scores = {'bleu': 0, 'rouge': 0};
   bool isGameFinished = false;
+  Map<String, int> consecutiveMissedTurns = {'bleu': 0, 'rouge': 0};
+  bool _resultModalShown = false; // Contrôle d'affichage du modal
 
-  // Timer
+  // Timer du jeu entier
   late Timer _gameTimer;
   int _timeRemaining = 180; // 3 minutes en secondes
   double _progressValue = 0.0;
+
+
+  // Timer de réflexion
+  late Timer _reflexionTimer;
+  int _reflexionTimeRemaining = 15; // 15 secondes par joueur
 
   // Contrôles de zoom et pan
   TransformationController _transformationController = TransformationController();
@@ -37,7 +44,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initializeGame();
-    _startTimer();
+    _startGameTimer();
+    _startReflexionTimer();
     
     _scoreAnimationController = AnimationController(
       vsync: this,
@@ -52,6 +60,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _gameTimer.cancel();
+    _reflexionTimer.cancel();
     _transformationController.dispose();
     _scoreAnimationController.dispose();
     super.dispose();
@@ -65,10 +74,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     isGameFinished = false;
     _timeRemaining = 180;
     _progressValue = 0.0;
+    _reflexionTimeRemaining = 15;
     _transformationController.value = Matrix4.identity();
+    consecutiveMissedTurns = {'bleu': 0, 'rouge': 0};
   }
 
-  void _startTimer() {
+  void _startGameTimer() {
     _gameTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (_timeRemaining > 0) {
         setState(() {
@@ -82,9 +93,67 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
 
+  void _startReflexionTimer() {
+    _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_reflexionTimeRemaining > 0) {
+        setState(() {
+          _reflexionTimeRemaining--;
+        });
+      } else {
+        // Temps écoulé - le joueur actuel a manqué son tour
+        _handleMissedTurn();
+        timer.cancel();
+        _startReflexionTimer();
+      }
+    });
+  }
+
+  void _handleMissedTurn() {
+    // Incrémenter le compteur pour le joueur actuel
+    consecutiveMissedTurns[currentPlayer] = consecutiveMissedTurns[currentPlayer]! + 1;
+    
+    // Vérifier si le joueur a manqué 3 tours consécutifs
+    if (consecutiveMissedTurns[currentPlayer]! >= 3) {
+      _endGameByMissedTurns(currentPlayer);
+      return;
+    }
+    
+    // Réinitialiser le compteur pour l'autre joueur (puisqu'il va jouer)
+    final otherPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+    consecutiveMissedTurns[otherPlayer] = 0;
+    
+    // Passer au joueur suivant normalement
+    _switchPlayer();
+  }
+
+  void _endGameByMissedTurns(String playerWhoMissed) {
+    setState(() {
+      isGameFinished = true;
+      _gameTimer.cancel();
+      _reflexionTimer.cancel();
+    });
+  }
+
+  void _resetReflexionTimer() {
+    _reflexionTimer.cancel();
+    setState(() {
+      _reflexionTimeRemaining = 15;
+    });
+    _startReflexionTimer();
+  }
+
+  void _switchPlayer() {
+    setState(() {
+      currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+      _reflexionTimeRemaining = 15;
+    });
+  }
+
+
   void _endGameByTime() {
     setState(() {
       isGameFinished = true;
+      _reflexionTimer.cancel();
     });
   }
 
@@ -96,6 +165,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
 
     setState(() {
+      // Réinitialiser le compteur de tours manqués pour ce joueur
+      consecutiveMissedTurns[currentPlayer] = 0;
+      
       points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
 
       final newSquares = GameLogic.checkSquares(
@@ -119,8 +191,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (points.length >= widget.gridSize * widget.gridSize) {
         isGameFinished = true;
         _gameTimer.cancel();
+        _reflexionTimer.cancel();
       } else {
-        currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+        _resetReflexionTimer();
+        _switchPlayer();
       }
     });
   }
@@ -138,6 +212,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _showResultModal() {
+    if (_resultModalShown) return; // ← EMPÊCHE l'affichage multiple
+    
+    _resultModalShown = true;
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.8),
@@ -145,6 +222,32 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return _buildResultModal();
       },
+    ).then((_) {
+      // Quand le modal est fermé, réinitialiser le flag
+      _resultModalShown = false;
+    });
+  }
+
+  Widget _buildReflexionTimer() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 1, vertical: 2),
+      child: Column(
+        children: [
+          // Timer de réflexion
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child:  Text(
+                  '$_reflexionTimeRemaining',
+                  style: TextStyle(
+                    color: _getPlayerColor(currentPlayer),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+          )
+         ],
+      ),
     );
   }
 
@@ -303,7 +406,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                             Navigator.of(context).pop();
                             
                             setState(() => _initializeGame());
-                            _startTimer();
+                            _startGameTimer();
                           },
                           child: Center(
                             child: Text(
@@ -365,7 +468,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ],
     );
   }
-
 
   Widget _buildWinnerProfile(String player) {
     final color = _getPlayerColor(player);
@@ -487,69 +589,108 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ],
     );
   }
-
+  
   Widget _buildTimerAndProgressBar() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          // Timer text
-          Text(
-            _formatTime(_timeRemaining),
-            style: TextStyle(
-              color: _timeRemaining <= 30 ? Color(0xFFff006e) : Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
-            ),
-          ),
-          SizedBox(height: 8),
-          // Progress bar
-          Container(
-            height: 8,
-            decoration: BoxDecoration(
-              color: Color(0xFF2d0052),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Stack(
-              children: [
-                // Background
-                Container(
-                  decoration: BoxDecoration(
-                    color: Color(0xFF2d0052),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+  return Container(
+    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Column(
+      children: [
+        // Barre de progression avec timer superposé
+        SizedBox(
+          height: 40, // Plus grand pour accommoder le texte superposé
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Barre de progression
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Color(0xFF2d0052),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                // Progress
-                AnimatedContainer(
-                  duration: Duration(milliseconds: 500),
-                  curve: Curves.easeOut,
-                  width: MediaQuery.of(context).size.width * _progressValue,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _timeRemaining <= 30 ? Color(0xFFff006e) : Color(0xFF00d4ff),
-                        _timeRemaining <= 30 ? Color(0xFFc40055) : Color(0xFF0099cc),
-                      ],
+                child: Stack(
+                  children: [
+                    // Background
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Color(0xFF2d0052),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_timeRemaining <= 30 ? Color(0xFFff006e) : Color(0xFF00d4ff)).withOpacity(0.5),
-                        blurRadius: 8,
-                        spreadRadius: 1,
+                    // Progress
+                    AnimatedContainer(
+                      duration: Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                      width: MediaQuery.of(context).size.width * _progressValue,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _getPlayerColor(currentPlayer),
+                            _getPlayerColor(currentPlayer).withOpacity(0.7),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _getPlayerColor(currentPlayer).withOpacity(0.5),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Timer superposé au centre - comme un grand frère qui protège
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF1a0033).withOpacity(0.9),
+                      Color(0xFF2d0052).withOpacity(0.9),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _getPlayerColor(currentPlayer),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  _formatTime(_timeRemaining),
+                  style: TextStyle(
+                    color: _getPlayerColor(currentPlayer),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        offset: Offset(1, 1),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
+        ),
+      ],
+    ),
+  );
+}
+ 
   Widget _buildCompactHeader() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -600,15 +741,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   icon: Icon(Icons.refresh, color: Colors.white, size: 20),
                   onPressed: () {
                     _gameTimer.cancel();
+                    _reflexionTimer.cancel();
                     setState(() => _initializeGame());
-                    _startTimer();
+                    _startGameTimer();
+                    _startReflexionTimer();
                   },
                 ),
               ),
             ],
           ),
-          
-          SizedBox(height: 12),
+          SizedBox(height: 10),
           
           // Statut et scores combinés
           Container(
@@ -639,13 +781,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             child: isGameFinished ? _buildWinnerStatus() : _buildScoresRow(),
           ),
           
-          // Timer et barre de progression
+          // Timer principal et barre de progression
           _buildTimerAndProgressBar(),
         ],
       ),
     );
   }
-
+  
   Widget _buildWinnerStatus() {
     String winner;
     if (scores['bleu']! > scores['rouge']!) {
@@ -690,7 +832,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       children: [
         _buildCompactPlayerScore('bleu', scores['bleu']!),
         Container(
-          width: 2,
+          width: 80,
           height: 40,
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -703,6 +845,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               end: Alignment.bottomCenter,
             ),
           ),
+          child: _buildReflexionTimer(),// Timer de réflexion au centre
         ),
         _buildCompactPlayerScore('rouge', scores['rouge']!),
       ],
@@ -761,6 +904,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+  
   Widget _buildGameGrid() {
     final cellSize = 60.0;
     final gridWidth = (widget.gridSize * cellSize) + 40; // +40 pour les points aux bords
@@ -929,11 +1073,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+  
   @override
   Widget build(BuildContext context) {
     // Afficher le modal quand le jeu est terminé
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isGameFinished && !_gameTimer.isActive) {
+      if (isGameFinished && !_resultModalShown) {
         _showResultModal();
       }
     });
@@ -992,39 +1137,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 }
 
-class Confetti {
-  late double x;
-  late double y;
-  late double size;
-  late Color color;
-  late double angle;
-  late double speed;
-  late double rotationSpeed;
-
-  Confetti() {
-    final random = math.Random();
-    x = random.nextDouble() * 400; // Largeur du modal
-    y = -random.nextDouble() * 100; // Commence au-dessus de l'écran
-    size = 8 + random.nextDouble() * 12;
-    color = [
-      Color(0xFFFFD700),
-      Color(0xFFFF6B6B),
-      Color(0xFF4ECDC4),
-      Color(0xFF45B7D1),
-      Color(0xFF96CEB4),
-      Color(0xFFFFEAA7),
-    ][random.nextInt(6)];
-    angle = random.nextDouble() * math.pi * 2;
-    speed = 2 + random.nextDouble() * 3;
-    rotationSpeed = (random.nextDouble() - 0.5) * 0.2;
-  }
-
-  void update() {
-    y += speed;
-    angle += rotationSpeed;
-  }
-}
-
 class GridPainter extends CustomPainter {
   final int gridSize;
   final double cellSize;
@@ -1062,4 +1174,3 @@ class GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
