@@ -2,13 +2,15 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/models/ai_player.dart';
 import '../models/game_model.dart';
 import '../utils/game_logic.dart';
 
 class GameScreen extends StatefulWidget {
   final int gridSize;
+  final bool isAgainstAI;
 
-  GameScreen({required this.gridSize});
+  GameScreen({required this.gridSize, required this.isAgainstAI});
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -24,11 +26,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Map<String, int> consecutiveMissedTurns = {'bleu': 0, 'rouge': 0};
   bool _resultModalShown = false; // Contrôle d'affichage du modal
 
+    // Nouveaux paramètres pour le mode IA
+  String aiPlayerId = 'rouge'; // L'IA joue avec les rouges par défaut
+  bool isAITurn = false;
+
   // Timer du jeu entier
   late Timer _gameTimer;
   int _timeRemaining = 180; // 3 minutes en secondes
   double _progressValue = 0.0;
-
 
   // Timer de réflexion
   late Timer _reflexionTimer;
@@ -38,7 +43,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   TransformationController _transformationController = TransformationController();
   late AnimationController _scoreAnimationController;
   late Animation<double> _scoreScaleAnimation;
-
 
   @override
   void initState() {
@@ -55,6 +59,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _scoreScaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _scoreAnimationController, curve: Curves.easeInOut),
     );
+
+  // Configurer l'IA si nécessaire
+    if (widget.isAgainstAI) {
+      //isAgainstAI = true;
+      aiPlayerId = 'rouge'; // L'IA joue avec les rouges
+      
+      // Si l'IA commence, démarrer son tour
+      if (currentPlayer == aiPlayerId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startAITurn();
+        });
+      }
+    }
   }
 
   @override
@@ -65,6 +82,70 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _scoreAnimationController.dispose();
     super.dispose();
   }
+
+  void _startAITurn() {
+  if (!widget.isAgainstAI || currentPlayer != aiPlayerId || isGameFinished) return;
+  
+  setState(() {
+    isAITurn = true;
+  });
+  
+  _playAIMove();
+}
+
+void _playAIMove() async {
+  final aiMove = await AIPlayer.getBestMove(
+    points,
+    widget.gridSize,
+    aiPlayerId,
+  );
+  
+  if (aiMove != null && mounted) {
+    setState(() {
+      isAITurn = false;
+    });
+    
+    // Simuler un délai pour que l'IA "réfléchisse"
+    await Future.delayed(Duration(milliseconds: 1000));
+    
+    if (mounted) {
+      _executeAIMove(aiMove);
+    }
+  }
+}
+
+void _executeAIMove(GridPoint aiMove) {
+  if (isGameFinished || !mounted) return;
+  
+  setState(() {
+    points.add(aiMove);
+    
+    final newSquares = GameLogic.checkSquares(
+      points,
+      widget.gridSize,
+      aiPlayerId,
+      aiMove.x,
+      aiMove.y,
+    );
+    
+    squares.addAll(newSquares);
+    scores[aiPlayerId] = scores[aiPlayerId]! + newSquares.length;
+    
+    if (points.length >= widget.gridSize * widget.gridSize) {
+      isGameFinished = true;
+      _gameTimer.cancel();
+      _reflexionTimer.cancel();
+    } else {
+      _resetReflexionTimer();
+      _switchPlayer();
+      
+      // Si après avoir changé de joueur, c'est encore à l'IA de jouer
+      if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
+        _startAITurn();
+      }
+    }
+  });
+}
 
   void _initializeGame() {
     points = [];
@@ -127,12 +208,21 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _endGameByMissedTurns(String playerWhoMissed) {
+    final loser = playerWhoMissed;
+    final winner = playerWhoMissed == 'bleu' ? 'rouge' : 'bleu';
+
     setState(() {
       isGameFinished = true;
       _gameTimer.cancel();
       _reflexionTimer.cancel();
+
+      // 🔹 Transfert des points du perdant au gagnant
+      final lostPoints = scores[loser] ?? 0;
+      scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
+      scores[loser] = 0;
     });
   }
+
 
   void _resetReflexionTimer() {
     _reflexionTimer.cancel();
@@ -149,7 +239,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
 
-
   void _endGameByTime() {
     setState(() {
       isGameFinished = true;
@@ -157,47 +246,93 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
 
+  // void _onPointTap(int x, int y) {
+  //   if (isGameFinished) return;
+
+  //   if (points.any((point) => point.x == x && point.y == y)) {
+  //     return;
+  //   }
+
+  //   setState(() {
+  //     // Réinitialiser le compteur de tours manqués pour ce joueur
+  //     consecutiveMissedTurns[currentPlayer] = 0;
+      
+  //     points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
+
+  //     final newSquares = GameLogic.checkSquares(
+  //       points,
+  //       widget.gridSize,
+  //       currentPlayer,
+  //       x,
+  //       y,
+  //     );
+
+  //     squares.addAll(newSquares);
+      
+  //     if (newSquares.isNotEmpty) {
+  //       _scoreAnimationController.forward().then((_) {
+  //         _scoreAnimationController.reverse();
+  //       });
+  //     }
+
+  //     scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
+
+  //     if (points.length >= widget.gridSize * widget.gridSize) {
+  //       isGameFinished = true;
+  //       _gameTimer.cancel();
+  //       _reflexionTimer.cancel();
+  //     } else {
+  //       _resetReflexionTimer();
+  //       _switchPlayer();
+  //     }
+  //   });
+  // }
+
   void _onPointTap(int x, int y) {
-    if (isGameFinished) return;
-
-    if (points.any((point) => point.x == x && point.y == y)) {
-      return;
-    }
-
-    setState(() {
-      // Réinitialiser le compteur de tours manqués pour ce joueur
-      consecutiveMissedTurns[currentPlayer] = 0;
-      
-      points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
-
-      final newSquares = GameLogic.checkSquares(
-        points,
-        widget.gridSize,
-        currentPlayer,
-        x,
-        y,
-      );
-
-      squares.addAll(newSquares);
-      
-      if (newSquares.isNotEmpty) {
-        _scoreAnimationController.forward().then((_) {
-          _scoreAnimationController.reverse();
-        });
-      }
-
-      scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
-
-      if (points.length >= widget.gridSize * widget.gridSize) {
-        isGameFinished = true;
-        _gameTimer.cancel();
-        _reflexionTimer.cancel();
-      } else {
-        _resetReflexionTimer();
-        _switchPlayer();
-      }
-    });
+  // Empêcher les clics pendant le tour de l'IA ou si le jeu est fini
+  if (isGameFinished || (widget.isAgainstAI && currentPlayer == aiPlayerId)) return;
+  
+  if (points.any((point) => point.x == x && point.y == y)) {
+    return;
   }
+  
+  setState(() {
+    consecutiveMissedTurns[currentPlayer] = 0;
+    points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
+    
+    final newSquares = GameLogic.checkSquares(
+      points,
+      widget.gridSize,
+      currentPlayer,
+      x,
+      y,
+    );
+    
+    squares.addAll(newSquares);
+    
+    if (newSquares.isNotEmpty) {
+      _scoreAnimationController.forward().then((_) {
+        _scoreAnimationController.reverse();
+      });
+    }
+    
+    scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
+    
+    if (points.length >= widget.gridSize * widget.gridSize) {
+      isGameFinished = true;
+      _gameTimer.cancel();
+      _reflexionTimer.cancel();
+    } else {
+      _resetReflexionTimer();
+      _switchPlayer();
+      
+      // Si on joue contre l'IA et que c'est son tour
+      if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
+        _startAITurn();
+      }
+    }
+  });
+}
 
   Color _getPlayerColor(String playerId) {
     return playerId == 'bleu' 
@@ -717,37 +852,42 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
               SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'GRILLE ${widget.gridSize}×${widget.gridSize}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
+                child: Row(
+                children: [
+                  Text(
+                    'Shikaku ${widget.gridSize}×${widget.gridSize}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
                   ),
-                ),
+                  if (widget.isAgainstAI && currentPlayer == aiPlayerId) ...[
+                    SizedBox(width: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange),
+                      ),
+                      child: Text(
+                        'IA réfléchit...',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFe040fb), Color(0xFFab47bc)],
-                  ),
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  icon: Icon(Icons.refresh, color: Colors.white, size: 20),
-                  onPressed: () {
-                    _gameTimer.cancel();
-                    _reflexionTimer.cancel();
-                    setState(() => _initializeGame());
-                    _startGameTimer();
-                    _startReflexionTimer();
-                  },
-                ),
+                
               ),
+              // Dropdown pour terminer le match
+              _buildGameMenuDropdown(),
             ],
           ),
           SizedBox(height: 10),
@@ -787,7 +927,179 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  
+Widget _buildGameMenuDropdown() {
+  return Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: LinearGradient(
+        colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+      ),
+    ),
+    child: PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      icon: Icon(Icons.more_vert, color: Colors.white, size: 20),
+      color: Color(0xFF2d0052),
+      surfaceTintColor: Color(0xFF2d0052),
+      shadowColor: Color(0xFF9c27b0).withOpacity(0.5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(5),
+        side: BorderSide(
+          color: Color(0xFF9c27b0),
+          width: 1,
+        ),
+      ),
+      onSelected: (String value) {
+        if (value == 'forfeit') {
+          _showForfeitConfirmation();
+        } else if (value == 'new_game') {
+          _showNewGameConfirmation();
+        }
+      },
+      itemBuilder: (BuildContext context) => [
+        PopupMenuItem<String>(
+          value: 'forfeit',
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFff006e), Color(0xFFc4005a)],
+                  ),
+                ),
+                child: Icon(Icons.flag, color: Colors.white, size: 18),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Abandonner',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'new_game',
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                  ),
+                ),
+                child: Icon(Icons.refresh, color: Colors.white, size: 18),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Nouvelle partie',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+  void _showForfeitConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF2d0052),
+          title: Text(
+            'Confirmer l\'abandon',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            'Voulez-vous vraiment abandonner la partie ? Votre adversaire gagnera.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Annuler', style: TextStyle(color: Colors.white70)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _endGameByForfeit();
+              },
+              child: Text('Abandonner', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showNewGameConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF2d0052),
+          title: Text(
+            'Nouvelle partie',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            'Voulez-vous recommencer une nouvelle partie ? La partie en cours sera perdue.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Annuler', style: TextStyle(color: Colors.white70)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _gameTimer.cancel();
+                _reflexionTimer.cancel();
+                setState(() => _initializeGame());
+                _startGameTimer();
+                _startReflexionTimer();
+              },
+              child: Text('Nouvelle partie', style: TextStyle(color: Colors.blue)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+void _endGameByForfeit() {
+  // Le joueur qui abandonne perd
+  final loser = currentPlayer; // celui qui abandonne
+  final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+
+  setState(() {
+    isGameFinished = true;
+    _gameTimer.cancel();
+    _reflexionTimer.cancel();
+
+    // On transfère le score du perdant au gagnant
+    final lostPoints = scores[loser] ?? 0; //(le ?? 0 veut dire “si jamais scores['bleu'] est null, on prend 0 à la place” — une sécurité)
+    scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
+    scores[loser] = 0;
+  });
+}
+
+
   Widget _buildWinnerStatus() {
     String winner;
     if (scores['bleu']! > scores['rouge']!) {
