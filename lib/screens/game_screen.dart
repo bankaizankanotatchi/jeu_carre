@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
+import 'package:jeu_carre/models/radarpoint.dart';
 import '../models/game_model.dart';
 import '../utils/game_logic.dart';
 
@@ -25,6 +25,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool isGameFinished = false;
   Map<String, int> consecutiveMissedTurns = {'bleu': 0, 'rouge': 0};
   bool _resultModalShown = false; // Contrôle d'affichage du modal
+
+  // Animation pour l'effet radar
+  late AnimationController _radarAnimationController;
+  late Animation<double> _radarAnimation;
+  GridPoint? _lastPlayedPoint;
 
     // Nouveaux paramètres pour le mode IA
   String aiPlayerId = 'rouge'; // L'IA joue avec les rouges par défaut
@@ -60,6 +65,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _scoreAnimationController, curve: Curves.easeInOut),
     );
 
+        // Animation radar
+    _radarAnimationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1500),
+    );
+    
+    _radarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _radarAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
   // Configurer l'IA si nécessaire
     if (widget.isAgainstAI) {
       //isAgainstAI = true;
@@ -72,6 +90,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         });
       }
     }
+    // ✅ CORRECTION : Zoomer sur le centre après l'initialisation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _centerZoom();
+    });
   }
 
   @override
@@ -80,7 +102,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _reflexionTimer.cancel();
     _transformationController.dispose();
     _scoreAnimationController.dispose();
+    _radarAnimationController.dispose();
     super.dispose();
+  }
+
+  void _startRadarAnimation(GridPoint point) {
+    _lastPlayedPoint = point;
+    _radarAnimationController.reset();
+    _radarAnimationController.forward();
   }
 
   void _startAITurn() {
@@ -93,24 +122,57 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   _playAIMove();
 }
 
+  // ✅ NOUVELLE MÉTHODE : Centrer le zoom
+  void _centerZoom() {
+    final screenSize = MediaQuery.of(context).size;
+    final gridWidth = (widget.gridSize * 60.0) + 40;
+    final gridHeight = (widget.gridSize * 60.0) + 40;
+
+    // Calculer le zoom pour que la grille tienne dans l'écran
+    final scaleX = screenSize.width / gridWidth;
+    final scaleY = screenSize.height * 0.7 / gridHeight; // 0.7 pour la hauteur de la grille
+    final scale = math.min(scaleX, scaleY) * 0.9; // 0.9 pour une petite marge
+
+    // Calculer la translation pour centrer
+    final translateX = (screenSize.width - (gridWidth * scale)) / 2;
+    final translateY = (screenSize.height * 0.7 - (gridHeight * scale)) / 2;
+
+    setState(() {
+      _transformationController.value = Matrix4.identity()
+        ..translate(translateX, translateY)
+        ..scale(scale);
+    });
+  }
+
 void _playAIMove() async {
+  if (!widget.isAgainstAI || currentPlayer != aiPlayerId || isGameFinished) return;
+  
+  setState(() {
+    isAITurn = true;
+  });
+  
+  // L'IA doit jouer avant que le timer expire
   final aiMove = await AIPlayer.getBestMove(
     points,
     widget.gridSize,
     aiPlayerId,
   );
   
+  // Vérifier que le timer n'a pas expiré pendant le calcul
+  if (_reflexionTimeRemaining <= 0) {
+    // Le temps est écoulé, l'IA a manqué son tour
+    setState(() {
+      isAITurn = false;
+    });
+    return;
+  }
+  
   if (aiMove != null && mounted) {
     setState(() {
       isAITurn = false;
     });
     
-    // Simuler un délai pour que l'IA "réfléchisse"
-    await Future.delayed(Duration(milliseconds: 1000));
-    
-    if (mounted) {
-      _executeAIMove(aiMove);
-    }
+    _executeAIMove(aiMove);
   }
 }
 
@@ -119,6 +181,9 @@ void _executeAIMove(GridPoint aiMove) {
   
   setState(() {
     points.add(aiMove);
+
+      // Démarrer l'animation radar pour le coup de l'IA
+      _startRadarAnimation(aiMove);
     
     final newSquares = GameLogic.checkSquares(
       points,
@@ -298,7 +363,11 @@ void _executeAIMove(GridPoint aiMove) {
   
   setState(() {
     consecutiveMissedTurns[currentPlayer] = 0;
-    points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
+      final newPoint = GridPoint(x: x, y: y, playerId: currentPlayer);
+      points.add(newPoint);
+      
+      // Démarrer l'animation radar pour ce point
+      _startRadarAnimation(newPoint);
     
     final newSquares = GameLogic.checkSquares(
       points,
@@ -1269,6 +1338,24 @@ void _endGameByForfeit() {
             ),
             child: Stack(
               children: [
+                 // Effet radar pour le dernier point joué
+              if (_lastPlayedPoint != null)
+                Positioned(
+                  left: _lastPlayedPoint!.x * cellSize,
+                  top: _lastPlayedPoint!.y * cellSize,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    child: CustomPaint(
+                      painter: RadarPointPainter(
+                        x: 20, // Centre du container de 40px
+                        y: 20, // Centre du container de 40px
+                        color: _getPlayerColor(_lastPlayedPoint!.playerId!),
+                        animationValue: _radarAnimation.value,
+                      ),
+                    ),
+                  ),
+                ),
                 // Carrés complétés
                 ...squares.map((square) {
                   return Positioned(

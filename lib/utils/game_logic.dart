@@ -41,8 +41,8 @@ class GameLogic {
   static bool _isValidSquare(int x, int y, int gridSize) {
     return x >= 0 && 
            y >= 0 && 
-           (x + squareSize) < gridSize && 
-           (y + squareSize) < gridSize;
+           (x + squareSize) <= gridSize && 
+           (y + squareSize) <= gridSize;
   }
 
   static bool _isSquareComplete(

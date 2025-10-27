@@ -1,6 +1,5 @@
 // models/ai_player.dart
 import 'dart:math';
-
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/utils/game_logic.dart';
 
@@ -10,35 +9,57 @@ class AIPlayer {
     int gridSize,
     String aiPlayerId,
   ) async {
-    // Simulation d'un temps de réflexion
-    await Future.delayed(Duration(milliseconds: 500 + Random().nextInt(1000)));
+    // Temps de réflexion aléatoire entre 1 et 10 secondes
+    // pour simuler une IA qui peut parfois être lente
+    final thinkingTime = 1000 + Random().nextInt(9000);
+    await Future.delayed(Duration(milliseconds: thinkingTime));
     
-    // Trouver tous les points disponibles
     final availablePoints = _getAvailablePoints(points, gridSize);
-    
     if (availablePoints.isEmpty) return null;
     
-    // Stratégie simple : prioriser les points qui peuvent former des carrés
+    // Stratégie prioritaire : chercher les carrés
     for (final point in availablePoints) {
-      // Vérifier si ce point peut former un carré
       final potentialSquares = _checkPotentialSquares(
-        points, 
-        gridSize, 
-        aiPlayerId, 
-        point.x, 
-        point.y
+        points, gridSize, aiPlayerId, point.x, point.y
       );
-      
       if (potentialSquares.isNotEmpty) {
         return GridPoint(x: point.x, y: point.y, playerId: aiPlayerId);
       }
     }
     
-    // Sinon, choisir un point au hasard
-    final randomPoint = availablePoints[Random().nextInt(availablePoints.length)];
+    // Stratégie secondaire : bloquer l'adversaire
+    final humanPlayerId = aiPlayerId == 'bleu' ? 'rouge' : 'bleu';
+    for (final point in availablePoints) {
+      final potentialSquares = _checkPotentialSquares(
+        points, gridSize, humanPlayerId, point.x, point.y
+      );
+      if (potentialSquares.isNotEmpty) {
+        return GridPoint(x: point.x, y: point.y, playerId: aiPlayerId);
+      }
+    }
+    
+    // Sinon : point stratégique au centre ou aléatoire
+    return _getStrategicMove(availablePoints, gridSize, aiPlayerId);
+  }
+  
+  static GridPoint _getStrategicMove(
+    List<GridPoint> availablePoints, 
+    int gridSize, 
+    String aiPlayerId
+  ) {
+    // Prioriser le centre de la grille
+    final center = gridSize / 2;
+    availablePoints.sort((a, b) {
+      final distA = (a.x - center).abs() + (a.y - center).abs();
+      final distB = (b.x - center).abs() + (b.y - center).abs();
+      return distA.compareTo(distB);
+    });
+    
+    // Prendre un des 3 meilleurs points stratégiques
+    final bestPoints = availablePoints.take(3).toList();
     return GridPoint(
-      x: randomPoint.x, 
-      y: randomPoint.y, 
+      x: bestPoints[Random().nextInt(bestPoints.length)].x,
+      y: bestPoints[Random().nextInt(bestPoints.length)].y,
       playerId: aiPlayerId
     );
   }

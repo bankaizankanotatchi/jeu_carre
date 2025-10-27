@@ -310,175 +310,63 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildRankingCard(String title, List<Map<String, dynamic>> ranking, Color color) {
-    return Container(
-      width: 280,
-      margin: EdgeInsets.only(right: 16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.3),
-            Color(0xFF2d0052).withOpacity(0.7),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5), width: 1),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-              ),
-            ),
-            SizedBox(height: 12),
-            ...ranking.asMap().entries.map((entry) {
-              final index = entry.key;
-              final player = entry.value;
-              return Container(
-                margin: EdgeInsets.only(bottom: 8),
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      player['avatar'],
-                      style: TextStyle(fontSize: 20),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            player['name'],
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            '${player['score']} pts',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      player['trend'] == 'up' ? Icons.arrow_upward : 
-                      player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
-                      color: player['trend'] == 'up' ? Colors.green : 
-                             player['trend'] == 'down' ? Colors.red : Colors.yellow,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGameModeCard({
+  Widget _buildSimpleGameModeCard({
     required String title,
-    required String subtitle,
-    required String description,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.8),
-            color.withOpacity(0.4),
+    return Expanded(
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color.withOpacity(0.8),
+              color.withOpacity(0.4),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 30),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 30),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        description,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  SizedBox(height: 16),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                Icon(Icons.arrow_forward_ios, color: Colors.white, size: 20),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -661,43 +549,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   ),
 
-                  // Cartes des niveaux IA
+                  // Cartes des niveaux IA - MODIFIÉ EN ROW
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildGameModeCard(
+                        _buildSimpleGameModeCard(
                           title: 'DÉBUTANT',
-                          subtitle: 'Grille 10×10 - IA Facile',
-                          description: 'Parfait pour apprendre les bases et maîtriser les mécaniques',
                           icon: Icons.school,
                           color: Color(0xFF00d4ff),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,))),
                         ),
-                        _buildGameModeCard(
+                        _buildSimpleGameModeCard(
                           title: 'INTERMÉDIAIRE',
-                          subtitle: 'Grille 15×15 - IA Moyenne',
-                          description: 'Un défi équilibré pour les joueurs expérimentés',
                           icon: Icons.auto_awesome,
                           color: Color(0xFF9c27b0),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,))),
                         ),
-                        _buildGameModeCard(
+                       
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 10,),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: [
+                         _buildSimpleGameModeCard(
                           title: 'EXPERT',
-                          subtitle: 'Grille 25×25 - IA Difficile',
-                          description: 'Le niveau ultime pour les maîtres du Shikaku',
                           icon: Icons.military_tech,
                           color: Color(0xFFff006e),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 25,isAgainstAI: true,))),
                         ),
+                       
                       ],
                     ),
                   ),
+                  
 
                   SizedBox(height: 40),
 
-                  // Section Multijoueur
+                  // Section Multijoueur - MODIFIÉ EN ROW
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 10),
                     child: Column(
@@ -713,40 +605,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                         ),
                         SizedBox(height: 20),
-                        _buildGameModeCard(
-                          title: 'AVEC UN AMI',
-                          subtitle: 'Partage d\'écran - Tour par tour',
-                          description: 'Affrontez un ami sur le même appareil dans un duel épique',
-                          icon: Icons.people,
-                          color: Color(0xFFe040fb),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: false,))),
-                        ),
-                        SizedBox(height: 16),
-                        _buildGameModeCard(
-                          title: 'CHERCHER UN ADVERSAIRE',
-                          subtitle: 'Matchmaking en ligne',
-                          description: 'Trouvez des adversaires de niveau similaire dans le monde entier',
-                          icon: Icons.public,
-                          color: Color(0xFF00b894),
-                          onTap: () {
-                            // Implémentation du matchmaking
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Recherche d\'adversaires en ligne...'),
-                                backgroundColor: Color(0xFF00b894),
-                              ),
-                            );
-                          },
+                        Row(
+                          children: [
+                            _buildSimpleGameModeCard(
+                              title: 'AVEC UN AMI',
+                              icon: Icons.people,
+                              color: Color(0xFFe040fb),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: false,))),
+                            ),
+                            _buildSimpleGameModeCard(
+                              title: 'EN LIGNE',
+                              icon: Icons.public,
+                              color: Color(0xFF00b894),
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Recherche d\'adversaires en ligne...'),
+                                    backgroundColor: Color(0xFF00b894),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
 
+                  // Section Classement
                   SizedBox(height: 40),
 
                   // Section Classement
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -767,27 +658,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             fontSize: 14,
                           ),
                         ),
+                        SizedBox(height: 30),
                       ],
                     ),
                   ),
 
-                  SizedBox(height: 20),
+                  // Classement du jour
+                  _buildRankingSection('DU JOUR', _dailyRanking, Color(0xFF00d4ff)),
+                  SizedBox(height: 40),
 
-                  // Classement du jour (défilement horizontal)
-                  SizedBox(
-                    height: 350,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      children: [
-                        _buildRankingCard('DU JOUR', _dailyRanking, Color(0xFF00d4ff)),
-                        _buildRankingCard('DE LA SEMAINE', _weeklyRanking, Color(0xFFe040fb)),
-                        _buildRankingCard('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
-                      ],
-                    ),
-                  ),
+                  // Classement de la semaine
+                  _buildRankingSection('DE LA SEMAINE', _weeklyRanking, Color(0xFFe040fb)),
+                  SizedBox(height: 40),
 
-                  SizedBox(height: 60),
+                  // Classement du mois
+                  _buildRankingSection('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
+                  SizedBox(height: 150),
                 ],
               ),
             ),
@@ -796,6 +682,178 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
+
+  Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Color color) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ),
+      SizedBox(height: 16),
+      SizedBox(
+        height: 140,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          children: ranking.asMap().entries.map((entry) {
+            final index = entry.key;
+            final player = entry.value;
+            final rank = index + 1;
+            
+            return Container(
+              margin: EdgeInsets.only(right: 20),
+              child: Column(
+                children: [
+                  // Avatar avec double bordure et numéro
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Bordure externe
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              color.withOpacity(0.8),
+                              color.withOpacity(0.4),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Bordure interne
+                      Container(
+                        width: 75,
+                        height: 75,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF2d0052),
+                          border: Border.all(
+                            color: color,
+                            width: 3,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            player['avatar'],
+                            style: TextStyle(fontSize: 24),
+                          ),
+                        ),
+                      ),
+                      // Numéro de classement qui déborde
+                      Positioned(
+                        left: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$rank',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Indicateur de tendance
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF2d0052),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: player['trend'] == 'up' ? Colors.green : 
+                                     player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                              width: 2,
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              player['trend'] == 'up' ? Icons.arrow_upward : 
+                              player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
+                              color: player['trend'] == 'up' ? Colors.green : 
+                                     player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                              size: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  // Nom du joueur avec ellipse si trop long
+                  Container(
+                    width: 90,
+                    child: Column(
+                      children: [
+                        Text(
+                          _truncateName(player['name']),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${player['score']} pts',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    ],
+  );
+}
+
+// Méthode utilitaire pour tronquer les noms longs
+String _truncateName(String name) {
+  if (name.length <= 10) return name;
+  return '${name.substring(0, 8)}..';
+}
 
   Widget _buildAnimatedParticle(int index) {
     final random = (index * 123) % 100;
