@@ -1,4 +1,3 @@
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/feedback.dart';
 import 'package:flutter/foundation.dart' as foundation;
@@ -17,7 +16,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final List<Message> _messages = [];
   final ScrollController _scrollController = ScrollController();
   bool _showCategoryAboveInput = false;
-  bool _emojiVisible = false; // 👈 visibilité du clavier emoji
 
   @override
   void initState() {
@@ -31,17 +29,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       }
     });
   }
-
-void _toggleEmojiKeyboard() {
-  setState(() {
-    _emojiVisible = !_emojiVisible;
-    if (_emojiVisible) {
-      _messageFocusNode.unfocus(); // cache le clavier normal
-    } else {
-      _messageFocusNode.requestFocus(); // réaffiche le clavier
-    }
-  });
-}
 
 
 
@@ -653,11 +640,6 @@ void _toggleEmojiKeyboard() {
                                   child: TextField(
                                     controller: _messageController,
                                     focusNode: _messageFocusNode,
-                                    onTap: () {
-                                        if (_emojiVisible) {
-                                          setState(() => _emojiVisible = false);
-                                        }
-                                      },
                                     maxLines: null,
                                     textInputAction: TextInputAction.newline,
                                     keyboardType: TextInputType.multiline,
@@ -672,10 +654,6 @@ void _toggleEmojiKeyboard() {
                                       ),
                                     ),
                                   ),
-                                ),
-                                IconButton(
-                                  icon: Icon(Icons.emoji_emotions, color: Color(0xFFe040fb)),
-                                  onPressed: _toggleEmojiKeyboard,
                                 ),
                               ],
                             ),
@@ -698,48 +676,6 @@ void _toggleEmojiKeyboard() {
                         ),
                       ],
                     ),
-                     SizedBox(width: 8),
-                    // Sélecteur d’emoji
-                    if (_emojiVisible)
-                      Container(
-                        height: 256,
-                        color: Color(0xFF1a0033),
-                        margin: EdgeInsets.only(top:15),
-                        child: EmojiPicker(
-                          textEditingController: _messageController,
-                          onEmojiSelected: (category, emoji) {
-                            _messageController.text += emoji.emoji;
-                            _messageController.selection = TextSelection.fromPosition(
-                              TextPosition(offset: _messageController.text.length),
-                            );
-                          },
-                          onBackspacePressed: () {
-                            final text = _messageController.text;
-                            if (text.isNotEmpty) {
-                              _messageController.text =
-                                  text.characters.skipLast(1).toString(); // supprime dernier emoji ou caractère
-                              _messageController.selection = TextSelection.fromPosition(
-                                TextPosition(offset: _messageController.text.length),
-                              );
-                            }
-                          },
-                          config: Config(
-                            height: 256,
-                            checkPlatformCompatibility: true,
-                            emojiViewConfig: EmojiViewConfig(
-                              emojiSizeMax: 28 *
-                                  (foundation.defaultTargetPlatform == TargetPlatform.iOS ? 1.2 : 1.0),
-                            ),
-                            viewOrderConfig: const ViewOrderConfig(
-                              top: EmojiPickerItem.categoryBar,
-                              middle: EmojiPickerItem.emojiView,
-                              bottom: EmojiPickerItem.searchBar,
-                            ),
-                          ),
-                        ),
-                      ),
-
-
                   ],
                   
                 ),

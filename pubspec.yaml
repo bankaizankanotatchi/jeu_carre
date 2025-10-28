@@ -17,7 +17,6 @@ dependencies:
   provider: ^6.1.5+1
   flutter_launcher_icons: ^0.14.4
   google_nav_bar: ^5.0.7
-  emoji_picker_flutter: ^4.3.0
 
 dev_dependencies:
   flutter_test:
