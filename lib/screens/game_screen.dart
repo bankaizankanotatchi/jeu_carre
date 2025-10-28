@@ -9,8 +9,10 @@ import '../utils/game_logic.dart';
 class GameScreen extends StatefulWidget {
   final int gridSize;
   final bool isAgainstAI;
+  final AIDifficulty aiDifficulty;
+  
 
-  GameScreen({required this.gridSize, required this.isAgainstAI});
+  GameScreen({required this.gridSize, required this.isAgainstAI, this.aiDifficulty = AIDifficulty.intermediate,});
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -156,6 +158,7 @@ void _playAIMove() async {
     points,
     widget.gridSize,
     aiPlayerId,
+    difficulty: widget.aiDifficulty, // ← ICI LA DIFFICULTÉ EST PASSÉE
   );
   
   // Vérifier que le timer n'a pas expiré pendant le calcul

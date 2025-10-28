@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/models/ai_player.dart';
 import 'game_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -558,13 +559,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'DÉBUTANT',
                           icon: Icons.school,
                           color: Color(0xFF00d4ff),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,))),
+                          onTap: () => Navigator.push(
+                            context, 
+                            MaterialPageRoute(
+                              builder: (context) => GameScreen(
+                                gridSize: 15,
+                                isAgainstAI: true,
+                                aiDifficulty: AIDifficulty.beginner,
+                              ))),
                         ),
                         _buildSimpleGameModeCard(
                           title: 'INTERMÉDIAIRE',
                           icon: Icons.auto_awesome,
                           color: Color(0xFF9c27b0),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,))),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,aiDifficulty: AIDifficulty.intermediate))),
                         ),
                        
                       ],
@@ -579,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'EXPERT',
                           icon: Icons.military_tech,
                           color: Color(0xFFff006e),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 25,isAgainstAI: true,))),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 25,isAgainstAI: true,aiDifficulty: AIDifficulty.expert,))),
                         ),
                        
                       ],
@@ -673,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                   // Classement du mois
                   _buildRankingSection('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
-                  SizedBox(height: 150),
+                  SizedBox(height: 80),
                 ],
               ),
             ),
@@ -849,11 +857,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   );
 }
 
-// Méthode utilitaire pour tronquer les noms longs
-String _truncateName(String name) {
-  if (name.length <= 10) return name;
-  return '${name.substring(0, 8)}..';
-}
+  // Méthode utilitaire pour tronquer les noms longs
+  String _truncateName(String name) {
+    if (name.length <= 10) return name;
+    return '${name.substring(0, 8)}..';
+  }
 
   Widget _buildAnimatedParticle(int index) {
     final random = (index * 123) % 100;
