@@ -51,6 +51,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AnimationController _scoreAnimationController;
   late Animation<double> _scoreScaleAnimation;
 
+  // Données fictives pour les spectateurs
+  final List<Map<String, dynamic>> _spectators = [
+    {'id': '1', 'avatar': '🥇', 'username': 'AlexPro'},
+    {'id': '2', 'avatar': '🤖', 'username': 'IA_Master'},
+    {'id': '3', 'avatar': '👑', 'username': 'ShikakuQueen'},
+    {'id': '4', 'avatar': '⚡', 'username': 'SpeedRunner'},
+    {'id': '5', 'avatar': '🎯', 'username': 'GridMaster'},
+    {'id': '6', 'avatar': '🌟', 'username': 'StarPlayer'},
+    {'id': '7', 'avatar': '🔥', 'username': 'FireSpirit'},
+    {'id': '8', 'avatar': '💎', 'username': 'DiamondMind'},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -313,48 +325,6 @@ void _executeAIMove(GridPoint aiMove) {
       _reflexionTimer.cancel();
     });
   }
-
-  // void _onPointTap(int x, int y) {
-  //   if (isGameFinished) return;
-
-  //   if (points.any((point) => point.x == x && point.y == y)) {
-  //     return;
-  //   }
-
-  //   setState(() {
-  //     // Réinitialiser le compteur de tours manqués pour ce joueur
-  //     consecutiveMissedTurns[currentPlayer] = 0;
-      
-  //     points.add(GridPoint(x: x, y: y, playerId: currentPlayer));
-
-  //     final newSquares = GameLogic.checkSquares(
-  //       points,
-  //       widget.gridSize,
-  //       currentPlayer,
-  //       x,
-  //       y,
-  //     );
-
-  //     squares.addAll(newSquares);
-      
-  //     if (newSquares.isNotEmpty) {
-  //       _scoreAnimationController.forward().then((_) {
-  //         _scoreAnimationController.reverse();
-  //       });
-  //     }
-
-  //     scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
-
-  //     if (points.length >= widget.gridSize * widget.gridSize) {
-  //       isGameFinished = true;
-  //       _gameTimer.cancel();
-  //       _reflexionTimer.cancel();
-  //     } else {
-  //       _resetReflexionTimer();
-  //       _switchPlayer();
-  //     }
-  //   });
-  // }
 
   void _onPointTap(int x, int y) {
   // Empêcher les clics pendant le tour de l'IA ou si le jeu est fini
@@ -999,6 +969,7 @@ void _executeAIMove(GridPoint aiMove) {
       ),
     );
   }
+
 Widget _buildGameMenuDropdown() {
   return Container(
     width: 40,
@@ -1165,7 +1136,7 @@ void _endGameByForfeit() {
     _reflexionTimer.cancel();
 
     // On transfère le score du perdant au gagnant
-    final lostPoints = scores[loser] ?? 0; //(le ?? 0 veut dire “si jamais scores['bleu'] est null, on prend 0 à la place” — une sécurité)
+    final lostPoints = scores[loser] ?? 0; //(le ?? 0 veut dire "si jamais scores['bleu'] est null, on prend 0 à la place" — une sécurité)
     scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
     scores[loser] = 0;
   });
@@ -1282,6 +1253,106 @@ void _endGameByForfeit() {
               color: color,
               fontSize: 18,
               fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NOUVELLE MÉTHODE : Zone des spectateurs
+  Widget _buildSpectatorsSection() {
+    return Container(
+      height: 90,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Color(0xFF1a0033),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: Color(0xFF4a0080),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        children: [
+          // En-tête avec le nombre de spectateurs
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Color(0xFF2d0052),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(13),
+                topRight: Radius.circular(13),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.visibility,
+                  color: Color(0xFFe040fb),
+                  size: 12,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '${_spectators.length} SPECTATEURS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Liste scrollable des avatars
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemCount: _spectators.length,
+              itemBuilder: (context, index) {
+                final spectator = _spectators[index];
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    children: [
+                      // Avatar du spectateur
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF9c27b0),
+                              Color(0xFF7b1fa2),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: Color(0xFFe040fb),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFF9c27b0).withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            spectator['avatar'],
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -1507,7 +1578,7 @@ void _endGameByForfeit() {
               // CADRE VERTICAL AVEC BORDURE pour la zone de jeu
               Expanded(
                 child: Container(
-                  margin: EdgeInsets.only(top: 0, bottom: 16, left: 16, right: 16),
+                  margin: EdgeInsets.only(top: 0, bottom: 8, left: 16, right: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
@@ -1531,6 +1602,9 @@ void _endGameByForfeit() {
                   ),
                 ),
               ),
+
+              // NOUVELLE SECTION : Zone des spectateurs
+              _buildSpectatorsSection(),
             ],
           ),
         ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
+import 'package:jeu_carre/screens/gamerule_screen.dart';
+import 'package:jeu_carre/screens/online_screen.dart';
 import 'game_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -71,139 +73,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _animationController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _showGameRules(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: EdgeInsets.all(20),
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF2d0052),
-                  Color(0xFF1a0033),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(
-                color: Color(0xFF9c27b0),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0xFF9c27b0).withOpacity(0.5),
-                  blurRadius: 30,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'RÈGLES DU JEU',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  _buildRuleItem('🎯 Objectif', 'Former le plus de carrés possible en connectant les points'),
-                  _buildRuleItem('🔄 Tour par Tour', 'Les joueurs bleu et rouge jouent alternativement'),
-                  _buildRuleItem('📐 Formation', 'Cliquez sur un point pour le relier et former des carrés'),
-                  _buildRuleItem('⭐ Score', 'Chaque carré complet rapporte 1 point'),
-                  _buildRuleItem('⏱️ Timer', '15 secondes par coup - 3 minutes par partie'),
-                  _buildRuleItem('🚫 Pénalités', '3 tours manqués = défaite automatique'),
-                  SizedBox(height: 20),
-                  Text(
-                    'CONSEILS STRATÉGIQUES',
-                    style: TextStyle(
-                      color: Color(0xFFe040fb),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  _buildTipItem('Bloquez les mouvements adverses'),
-                  _buildTipItem('Priorisez les carrés multiples'),
-                  _buildTipItem('Anticipez 2-3 coups à l\'avance'),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildRuleItem(String title, String description) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Color(0xFF00d4ff),
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            description,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 14,
-            ),
-          ),
-          SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTipItem(String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(Icons.star, color: Color(0xFFFFD700), size: 16),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showAboutDialog(BuildContext context) {
@@ -377,96 +246,105 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final double appBarHeight = 200 - (_scrollOffset * 0.5).clamp(0.0, 100.0);
 
     return Scaffold(
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
           // SliverAppBar avec effet parallax
-         SliverAppBar(
-        expandedHeight: 200.0,
-        floating: false,
-        pinned: true,
-        backgroundColor: Color(0xFF1a0033), // Fond violet foncé
-        flexibleSpace: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final top = constraints.biggest.height;
-            final bool isExpanded = top == 200.0;
-            
-            return FlexibleSpaceBar(
-              title: AnimatedOpacity(
-                duration: Duration(milliseconds: 200),
-                opacity: isExpanded ? 0.0 : 1.0,
-                child: Text(
-                  'Shikaku',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-              centerTitle: true,
-              background: Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF1a0033),
-                          Color(0xFF2d0052),
-                          Color(0xFF4a0080),
-                          Color(0xFF6200b3),
-                        ],
+          SliverAppBar(
+            expandedHeight: 200.0,
+            floating: false,
+            pinned: true,
+            backgroundColor: const Color(0xFF1a0033),
+            flexibleSpace: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final top = constraints.biggest.height;
+                final bool isExpanded = top == 200.0;
+
+                return FlexibleSpaceBar(
+                  title: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isExpanded ? 0.0 : 1.0,
+                    child: const Text(
+                      'Shikaku',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
                       ),
-                    ),),
-                  // Effet de particules animées
-                  ...List.generate(15, (index) => _buildAnimatedParticle(index)),
+                    ),
+                  ),
+                  centerTitle: true,
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // 🌈 Dégradé violet en fond
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF1a0033),
+                              Color(0xFF2d0052),
+                              Color(0xFF4a0080),
+                              Color(0xFF6200b3),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // 🟪 Dessin personnalisé par-dessus
+                      CustomPaint(
+                        painter: SquareFormationPainter(),
+                        size: Size.infinite,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: Colors.white),
+                color: const Color(0xFF2d0052),
+                onSelected: (value) {
+                  if (value == 'rules') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => GameRulesScreen()),
+                    );
+                  } else if (value == 'about') {
+                    _showAboutDialog(context);
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'rules',
+                    child: Row(
+                      children: [
+                        Icon(Icons.help_outline, color: Color(0xFF00d4ff)),
+                        SizedBox(width: 8),
+                        Text('Règles du jeu', style: TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'about',
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Color(0xFFe040fb)),
+                        SizedBox(width: 8),
+                        Text('À propos', style: TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                  ),
                 ],
-              ),
-            );
-          },
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: Colors.white),
-            color: Color(0xFF2d0052),
-            onSelected: (value) {
-              if (value == 'rules') {
-                _showGameRules(context);
-              } else if (value == 'about') {
-                _showAboutDialog(context);
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(
-                value: 'rules',
-                child: Row(
-                  children: [
-                    Icon(Icons.help_outline, color: Color(0xFF00d4ff)),
-                    SizedBox(width: 8),
-                    Text('Règles du jeu',style: TextStyle(color: Colors.white),),
-                  ],
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'about',
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Color(0xFFe040fb)),
-                    SizedBox(width: 8),
-                    Text('À propos',style: TextStyle(color: Colors.white),),
-                  ],
-                ),
               ),
             ],
           ),
-        ],
-      ),
           // Contenu principal
           SliverToBoxAdapter(
             child: Container(
@@ -625,14 +503,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               title: 'EN LIGNE',
                               icon: Icons.public,
                               color: Color(0xFF00b894),
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Recherche d\'adversaires en ligne...'),
-                                    backgroundColor: Color(0xFF00b894),
-                                  ),
-                                );
-                              },
+                                onTap: () => Navigator.push(
+                                context, 
+                                MaterialPageRoute(builder: (context) => OnlineUsersScreen())
+                              ),
                             ),
                           ],
                         ),
@@ -859,48 +733,134 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   // Méthode utilitaire pour tronquer les noms longs
   String _truncateName(String name) {
-    if (name.length <= 10) return name;
-    return '${name.substring(0, 8)}..';
+    if (name.length <= 15) return name;
+    return '${name.substring(0, 14)}..';
   }
 
-  Widget _buildAnimatedParticle(int index) {
-    final random = (index * 123) % 100;
-    final left = (random % 100).toDouble();
-    final top = ((random * 7) % 100).toDouble();
-    final size = 2.0 + (random % 4);
-    final duration = 3 + (random % 5);
-    
-    return Positioned(
-      left: left.clamp(0, 100) * MediaQuery.of(context).size.width / 100,
-      top: top.clamp(0, 100) * 200 / 100,
-      child: TweenAnimationBuilder(
-        duration: Duration(seconds: duration),
-        tween: Tween<double>(begin: 0.0, end: 1.0),
-        builder: (context, double value, child) {
-          return Opacity(
-            opacity: value,
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFe040fb).withOpacity(0.6),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0xFFe040fb).withOpacity(0.4),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-        onEnd: () {
-          if (mounted) {
-            setState(() {});
-          }
-        },
-      ),
+}
+
+class SquareFormationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const int gridCount = 7; // 7 colonnes / 7 lignes
+    final cellSize = size.width / gridCount;
+
+    // 🧱 Grille
+    final gridPaint = Paint()
+      ..color = const Color(0xFF6200b3).withOpacity(0.3)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // Lignes verticales
+    for (int i = 0; i <= gridCount; i++) {
+      final x = i * cellSize;
+      canvas.drawLine(Offset(x, 0), Offset(x, gridCount * cellSize), gridPaint);
+    }
+
+    // Lignes horizontales
+    for (int j = 0; j <= gridCount; j++) {
+      final y = j * cellSize;
+      canvas.drawLine(Offset(0, y), Offset(gridCount * cellSize, y), gridPaint);
+    }
+
+    // 🔵 Points de la grille
+    final pointPaint = Paint()..style = PaintingStyle.fill;
+    for (int x = 0; x <= gridCount; x++) {
+      for (int y = 0; y <= gridCount; y++) {
+        pointPaint.color = const Color(0xFF4a0080).withOpacity(0.5);
+        canvas.drawCircle(Offset(x * cellSize, y * cellSize), 3.5, pointPaint);
+      }
+    }
+
+    // 🎨 Peintures carrés
+    final squarePaintBlue = Paint()
+      ..color = const Color(0xFF00d4ff).withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+    final squarePaintRed = Paint()
+      ..color = const Color(0xFFc4005a).withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+
+    final squareBorderBlue = Paint()
+      ..color = const Color(0xFF00d4ff)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    final squareBorderRed = Paint()
+      ..color = const Color(0xFFc4005a)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    // 🟦 Carré bleu (2x2 cellules en haut à gauche)
+    final squareRectBlue = Rect.fromPoints(
+      Offset(cellSize * 1 + 2, cellSize * 1 + 2),
+      Offset(cellSize * 2 - 2, cellSize * 2 - 2),
     );
+    final squareRectBlue2 = Rect.fromPoints(
+      Offset(cellSize * 5 + 2, cellSize * 0 + 2),
+      Offset(cellSize * 6 - 2, cellSize * 1 - 2),
+    );
+
+    // 🔴 Carré rouge (2x2 cellules au centre-bas)
+    final squareRectRed = Rect.fromPoints(
+      Offset(cellSize * 3 + 2, cellSize * 2 + 2),
+      Offset(cellSize * 4 - 2, cellSize * 3 - 2),
+    );
+    final squareRectRed2 = Rect.fromPoints(
+      Offset(cellSize * 4 - 2, cellSize * 2 + 2),
+      Offset(cellSize * 5 - 2, cellSize * 3 - 2),
+    );
+
+    // Dessin des carrés
+    canvas.drawRect(squareRectBlue, squarePaintBlue);
+    canvas.drawRect(squareRectBlue, squareBorderBlue);
+    canvas.drawRect(squareRectBlue2, squarePaintBlue);
+    canvas.drawRect(squareRectBlue2, squareBorderBlue);
+    canvas.drawRect(squareRectRed, squarePaintRed);
+    canvas.drawRect(squareRectRed, squareBorderRed);
+    canvas.drawRect(squareRectRed2, squarePaintRed);
+    canvas.drawRect(squareRectRed2, squareBorderRed);
+
+    // 🌟 Points de surbrillance (coins)
+    final highlightPaintBlue = Paint()..color = const Color(0xFF00d4ff);
+    final highlightPaintRed = Paint()..color = const Color(0xFFc4005a);
+
+    // Coins du carré bleu
+    final blueCorners = [
+      Offset(cellSize * 1, cellSize * 1),
+      Offset(cellSize * 2, cellSize * 1),
+      Offset(cellSize * 1, cellSize * 2),
+      Offset(cellSize * 2, cellSize * 2),
+    ];
+    for (final c in blueCorners) {
+      canvas.drawCircle(c, 5, highlightPaintBlue);
+    }
+
+    // Coins du carré rouge
+    final redCorners = [
+      Offset(cellSize * 3, cellSize * 2),
+      Offset(cellSize * 4, cellSize * 2),
+      Offset(cellSize * 3, cellSize * 3),
+      Offset(cellSize * 4, cellSize * 3),
+    ];
+    for (final c in redCorners) {
+      canvas.drawCircle(c, 5, highlightPaintRed);
+    }
+
+    // 🎲 Points décoratifs (quelques positions pour enrichir la grille)
+    canvas.drawCircle(Offset(cellSize * 3, cellSize * 1), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 1, cellSize * 5), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 5, cellSize * 0), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 6, cellSize * 0), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 6, cellSize * 1), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 5, cellSize * 1), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 6, cellSize * 3), 5, highlightPaintBlue);
+    canvas.drawCircle(Offset(cellSize * 2, cellSize * 3), 5, highlightPaintRed);
+    canvas.drawCircle(Offset(cellSize * 6, cellSize * 2), 5, highlightPaintRed);
+    canvas.drawCircle(Offset(cellSize * 3, cellSize * 5), 5, highlightPaintRed);
+    canvas.drawCircle(Offset(cellSize * 5, cellSize * 2), 5, highlightPaintRed);
+    canvas.drawCircle(Offset(cellSize * 5, cellSize * 3), 5, highlightPaintRed);
+    canvas.drawCircle(Offset(cellSize * 4, cellSize * 1), 5, highlightPaintRed);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
