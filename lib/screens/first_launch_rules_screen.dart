@@ -1,16 +1,19 @@
+// screens/first_launch_rules_screen.dart
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/screens/signup_screen.dart';
+import 'package:jeu_carre/services/preferences_service.dart';
 
-class GameRulesScreen extends StatefulWidget {
-  const GameRulesScreen({super.key});
+class FirstLaunchRulesScreen extends StatefulWidget {
+  const FirstLaunchRulesScreen({super.key});
 
   @override
-  State<GameRulesScreen> createState() => _GameRulesScreenState();
+  State<FirstLaunchRulesScreen> createState() => _FirstLaunchRulesScreenState();
 }
 
-class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen> 
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
@@ -47,42 +50,13 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
     },
   ];
 
-  final List<Map<String, dynamic>> _strategyTips = [
-    {
-      'title': '🧠 STRATÉGIE DÉFENSIVE',
-      'description': 'Bloquez les mouvements adverses en anticipant leurs coups. Empêchez la formation de carrés multiples.',
-      'icon': Icons.shield,
-      'color': Color(0xFF00d4ff),
-    },
-    {
-      'title': '⚡ STRATÉGIE OFFENSIVE',
-      'description': 'Priorisez les positions qui peuvent créer plusieurs carrés en un seul coup.',
-      'icon': Icons.bolt,
-      'color': Color(0xFFff006e),
-    },
-    {
-      'title': '🔍 ANTICIPATION',
-      'description': 'Regardez 2-3 coups à l\'avance. Analysez les opportunités de carrés potentiels.',
-      'icon': Icons.search,
-      'color': Color(0xFFe040fb),
-    },
-    {
-      'title': '🎯 CONTRÔLE DU CENTRE',
-      'description': 'Le centre de la grille offre plus d\'opportunités. Contrôlez-le pour maximiser vos chances.',
-      'icon': Icons.center_focus_strong,
-      'color': Color(0xFF9c27b0),
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -108,10 +82,10 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               height: size,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFFe040fb).withOpacity(0.6),
+                color: const Color(0xFFe040fb).withOpacity(0.6),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFFe040fb).withOpacity(0.4),
+                    color: const Color(0xFFe040fb).withOpacity(0.4),
                     blurRadius: 10,
                   ),
                 ],
@@ -152,8 +126,8 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
       width: 200,
       height: 200,
       decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        border: Border.all(color: Color(0xFF4a0080), width: 2),
+        color: const Color(0xFF1a0033),
+        border: Border.all(color: const Color(0xFF4a0080), width: 2),
       ),
       child: CustomPaint(
         painter: GridIllustrationPainter(),
@@ -178,19 +152,19 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      Color(0xFF00d4ff).withOpacity(0.8),
-                      Color(0xFF00d4ff).withOpacity(0.3),
+                      const Color(0xFF00d4ff).withOpacity(0.8),
+                      const Color(0xFF00d4ff).withOpacity(0.3),
                     ],
                   ),
-                  border: Border.all(color: Color(0xFF00d4ff), width: 3),
+                  border: Border.all(color: const Color(0xFF00d4ff), width: 3),
                 ),
-                child: Icon(Icons.person, color: Colors.white, size: 30),
+                child: const Icon(Icons.person, color: Colors.white, size: 30),
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               Text(
                 'BLEU',
                 style: TextStyle(
-                  color: Color(0xFF00d4ff),
+                  color: const Color(0xFF00d4ff),
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
                 ),
@@ -207,19 +181,19 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      Color(0xFFff006e).withOpacity(0.8),
-                      Color(0xFFff006e).withOpacity(0.3),
+                      const Color(0xFFff006e).withOpacity(0.8),
+                      const Color(0xFFff006e).withOpacity(0.3),
                     ],
                   ),
-                  border: Border.all(color: Color(0xFFff006e), width: 3),
+                  border: Border.all(color: const Color(0xFFff006e), width: 3),
                 ),
-                child: Icon(Icons.person, color: Colors.white, size: 30),
+                child: const Icon(Icons.person, color: Colors.white, size: 30),
               ),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               Text(
                 'ROUGE',
                 style: TextStyle(
-                  color: Color(0xFFff006e),
+                  color: const Color(0xFFff006e),
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
                 ),
@@ -236,8 +210,8 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
       width: 200,
       height: 200,
       decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        border: Border.all(color: Color(0xFF4a0080), width: 2),
+        color: const Color(0xFF1a0033),
+        border: Border.all(color: const Color(0xFF4a0080), width: 2),
       ),
       child: CustomPaint(
         painter: SquareFormationPainter(),
@@ -258,11 +232,11 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
             decoration: BoxDecoration(
               gradient: RadialGradient(
                 colors: [
-                  Color(0xFFe040fb).withOpacity(0.8),
-                  Color(0xFFe040fb).withOpacity(0.2),
+                  const Color(0xFFe040fb).withOpacity(0.8),
+                  const Color(0xFFe040fb).withOpacity(0.2),
                 ],
               ),
-              border: Border.all(color: Color(0xFFe040fb), width: 3),
+              border: Border.all(color: const Color(0xFFe040fb), width: 3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
@@ -276,13 +250,13 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               ),
             ),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildScoreIndicator('BLEU', 3, Color(0xFF00d4ff)),
-              SizedBox(width: 20),
-              _buildScoreIndicator('ROUGE', 2, Color(0xFFff006e)),
+              _buildScoreIndicator('BLEU', 3, const Color(0xFF00d4ff)),
+              const SizedBox(width: 20),
+              _buildScoreIndicator('ROUGE', 2, const Color(0xFFff006e)),
             ],
           ),
         ],
@@ -307,7 +281,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
             border: Border.all(color: color, width: 2),
           ),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
           '$score',
           style: TextStyle(
@@ -335,9 +309,9 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildTimerItem('⏱️ Tour', '15s', Color(0xFF00d4ff)),
-          _buildTimerItem('⏰ Partie', '3:00', Color(0xFFe040fb)),
-          _buildTimerItem('🚫 Pénalité', '3 tours', Color(0xFFff006e)),
+          _buildTimerItem('⏱️ Tour', '15s', const Color(0xFF00d4ff)),
+          _buildTimerItem('⏰ Partie', '3:00', const Color(0xFFe040fb)),
+          _buildTimerItem('🚫 Pénalité', '3 tours', const Color(0xFFff006e)),
         ],
       ),
     );
@@ -345,7 +319,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
 
   Widget _buildTimerItem(String label, String time, Color color) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(25),
@@ -362,7 +336,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               fontSize: 14,
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Text(
             time,
             style: TextStyle(
@@ -390,23 +364,23 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Color(0xFFFFD700).withOpacity(0.8),
-                  Color(0xFFFFA000).withOpacity(0.3),
+                  const Color(0xFFFFD700).withOpacity(0.8),
+                  const Color(0xFFFFA000).withOpacity(0.3),
                 ],
               ),
-              border: Border.all(color: Color(0xFFFFD700), width: 3),
+              border: Border.all(color: const Color(0xFFFFD700), width: 3),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.emoji_events,
               color: Colors.white,
               size: 50,
             ),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Text(
             'VICTOIRE !',
             style: TextStyle(
-              color: Color(0xFFFFD700),
+              color: const Color(0xFFFFD700),
               fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
@@ -431,20 +405,20 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
             itemBuilder: (context, index) {
               final rule = _rulesSections[index];
               return Container(
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(height: 30),
+                      const SizedBox(height: 30),
                       // Illustration
                       _buildRuleIllustration(rule['illustration'], index),
-                      SizedBox(height: 30),
+                      const SizedBox(height: 30),
                       
                       // Titre
                       Text(
                         rule['title'],
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -452,7 +426,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       
                       // Description
                       Text(
@@ -474,7 +448,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
         ),
         
         // Indicateurs de page
-        Container(
+        SizedBox(
           height: 50,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -482,11 +456,11 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               return Container(
                 width: 8,
                 height: 8,
-                margin: EdgeInsets.symmetric(horizontal: 4),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _currentPage == index 
-                      ? Color(0xFF00d4ff)
+                      ? const Color(0xFF00d4ff)
                       : Colors.white.withOpacity(0.3),
                 ),
               );
@@ -496,14 +470,14 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
         
         // Boutons de navigation
         Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              _currentPage != 0 ? Expanded(
+              _currentPage !=0 ? Expanded(
                 child: Container(
                   height: 50,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
                         Color(0xFF9c27b0),
                         Color(0xFF7b1fa2),
@@ -517,7 +491,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                       borderRadius: BorderRadius.circular(15),
                       onTap: _currentPage > 0 ? () {
                         _pageController.previousPage(
-                          duration: Duration(milliseconds: 300),
+                          duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
                         );
                       } : null,
@@ -530,7 +504,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                               color: _currentPage > 0 ? Colors.white : Colors.white.withOpacity(0.5),
                               size: 20,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
                               'PRÉCÉDENT',
                               style: TextStyle(
@@ -545,13 +519,13 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                     ),
                   ),
                 ),
-              ):SizedBox(),
+              ):const SizedBox(),
               _currentPage !=0 ?const SizedBox(width: 12):const SizedBox(),
               Expanded(
                 child: Container(
                   height: 50,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
                         Color(0xFF00d4ff),
                         Color(0xFF0099cc),
@@ -563,27 +537,39 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                     color: Colors.transparent,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(15),
-                      onTap: _currentPage < _rulesSections.length - 1 ? () {
-                        _pageController.nextPage(
-                          duration: Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      } : null,
+                      onTap: () async {
+                        if (_currentPage < _rulesSections.length - 1) {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        } else {
+                          // Marquer le premier lancement comme terminé et rediriger vers la connexion
+                          await PreferencesService.setFirstLaunchCompleted();
+                          
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SignupScreen(),
+                            ),
+                          );
+                        }
+                      },
                       child: Center(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              _currentPage < _rulesSections.length - 1 ? 'SUIVANT' : 'TERMINER',
-                              style: TextStyle(
+                              _currentPage < _rulesSections.length - 1 ? 'SUIVANT' : 'COMMENCER',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Icon(
-                              _currentPage < _rulesSections.length - 1 ? Icons.arrow_forward : Icons.check,
+                              _currentPage < _rulesSections.length - 1 ? Icons.arrow_forward : Icons.play_arrow,
                               color: Colors.white,
                               size: 20,
                             ),
@@ -601,109 +587,15 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildStrategyTips() {
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: _strategyTips.length,
-      itemBuilder: (context, index) {
-        final tip = _strategyTips[index];
-        return Container(
-          margin: EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFF2d0052),
-                Color(0xFF1a0033),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: tip['color'],
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: tip['color'].withOpacity(0.3),
-                blurRadius: 15,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(15),
-              onTap: () {},
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            tip['color'].withOpacity(0.8),
-                            tip['color'].withOpacity(0.3),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: tip['color'],
-                          width: 2,
-                        ),
-                      ),
-                      child: Icon(
-                        tip['icon'],
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tip['title'],
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            tip['description'],
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0a0015),
+      backgroundColor: const Color(0xFF0a0015),
       body: Column(
         children: [
           // Header
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -717,97 +609,42 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
               children: [
                 ...List.generate(12, (index) => _buildAnimatedParticle(index)),
                 
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          margin: EdgeInsets.fromLTRB(16, 65, 16, 10),
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 65, 16, 20),
+                  child: Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'BIENVENUE DANS SHIKUKA!',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
                             ),
-                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                            onPressed: () => Navigator.pop(context),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Découvrez les règles du jeu',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 15,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 16),
-                        Container(
-                          padding: EdgeInsets.fromLTRB(2, 25, 6, 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'RÈGLES DU JEU',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Apprenez à maîtriser Shikaku comme un pro',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    
-                    // TabBar
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Color(0xFF1a0033),
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFF4a0080)),
+                        ],
                       ),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicatorColor: Color(0xFF00d4ff),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white.withOpacity(0.6),
-                      labelStyle: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        letterSpacing: 1.0,
-                      ),
-                      indicatorWeight: 3,
-                      tabs: [
-                        Tab(icon: Icon(Icons.menu_book), text: 'RÈGLES'),
-                        Tab(icon: Icon(Icons.psychology), text: 'STRATÉGIES'),
-                      ],
-                    ),
+                    ],
                   ),
-                  ],
                 ),
               ],
             ),
           ),
           
-          // Contenu des tabs
+          // Contenu des règles
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildRulesPageView(),
-                _buildStrategyTips(),
-              ],
-            ),
+            child:  _buildRulesPageView(),
           ),
         ],
       ),
@@ -830,7 +667,7 @@ class GridIllustrationPainter extends CustomPainter {
     final offsetY = (size.height - gridSize) / 2;
 
     final paint = Paint()
-      ..color = Color(0xFF6200b3).withOpacity(0.3)
+      ..color = const Color(0xFF6200b3).withOpacity(0.3)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
@@ -866,7 +703,7 @@ class GridIllustrationPainter extends CustomPainter {
 
     for (int x = 0; x <= 4; x++) {
       for (int y = 0; y <= 4; y++) {
-        pointPaint.color = Color(0xFF4a0080).withOpacity(0.5);
+        pointPaint.color = const Color(0xFF4a0080).withOpacity(0.5);
         canvas.drawCircle(
           Offset(x * cellSize, y * cellSize),
           4,
@@ -881,8 +718,6 @@ class GridIllustrationPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-
 
 class SquareFormationPainter extends CustomPainter {
   @override
@@ -978,18 +813,8 @@ class SquareFormationPainter extends CustomPainter {
     canvas.drawCircle(Offset(2 * cellSize, 1 * cellSize), 6, highlightPaintRed);
     canvas.drawCircle(Offset(3 * cellSize, 2 * cellSize), 6, highlightPaintRed);
     canvas.drawCircle(Offset(1 * cellSize, 2 * cellSize), 6, highlightPaintRed);
-
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// Modèle temporaire pour GridPoint
-class GridPoint {
-  final int x;
-  final int y;
-  final String? playerId;
-
-  GridPoint({required this.x, required this.y, this.playerId});
 }
