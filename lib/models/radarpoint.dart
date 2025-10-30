@@ -20,7 +20,7 @@ class RadarPointPainter extends CustomPainter {
     
     // Effet radar principal
     final radarPaint = Paint()
-      ..color = color.withOpacity(0.3 * (1 - animationValue))
+      ..color = color.withOpacity(0.6 * (1 - animationValue))
       ..style = PaintingStyle.fill;
     
     // Cercle d'onde radar
@@ -29,7 +29,7 @@ class RadarPointPainter extends CustomPainter {
     
     // Anneau externe
     final ringPaint = Paint()
-      ..color = color.withOpacity(0.6 * (1 - animationValue))
+      ..color = color.withOpacity(0.9 * (1 - animationValue))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     

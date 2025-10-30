@@ -721,7 +721,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                     Row(
                       children: [
                         Container(
-                          margin: EdgeInsets.fromLTRB(16, 25, 16, 10),
+                          margin: EdgeInsets.fromLTRB(16, 55, 16, 10),
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(

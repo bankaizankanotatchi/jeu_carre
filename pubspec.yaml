@@ -17,19 +17,31 @@ dependencies:
   provider: ^6.1.5+1
   flutter_launcher_icons: ^0.14.4
   google_nav_bar: ^5.0.7
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# 🔹 Configuration du générateur d’icônes
+# 🔹 Configuration du générateur d’icônes flutter pub run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon/app_icon.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon/app_icon.png" # facultatif
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+
+# 🔹 Configuration de l'écran de chargement (Splash Screen) flutter pub run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"              # Fond blanc
+  android: true
+  ios: true                     # ✅ Activation iOS
+  android_gravity: center
+  ios_content_mode: center
+  web: false                    # facultatif, désactivé pour les builds web
+  android_12:
+    icon_background_color: "#FFFFFF"
 
 flutter:
   uses-material-design: true

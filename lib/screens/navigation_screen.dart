@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:jeu_carre/screens/home_screen.dart';
-import 'package:jeu_carre/screens/match_screen.dart';
-import 'package:jeu_carre/screens/feedback_screen.dart';
-import 'package:jeu_carre/screens/profile_screen.dart';
+import 'package:jeu_carre/screens/home_screen/home_screen.dart';
+import 'package:jeu_carre/screens/match_screen/match_screen.dart';
+import 'package:jeu_carre/screens/feedback_screen/feedback_screen.dart';
+import 'package:jeu_carre/screens/profile_screen/profile_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});

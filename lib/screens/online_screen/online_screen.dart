@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
+import 'package:jeu_carre/screens/profil_adversaire/profil_adversaire.dart';
 
 class OnlineUsersScreen extends StatefulWidget {
   const OnlineUsersScreen({super.key});
@@ -727,21 +729,26 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
   }
 
   void _challengeUser(Map<String, dynamic> user) {
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Défi envoyé à ${user['username']} !'),
-        backgroundColor: Color(0xFF00d4ff),
+    Navigator.of(context).pop(); // Ferme le dialog de profil
+    
+    // Redirige vers le screen de configuration pour un match en ligne
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GameSetupScreen(
+          isAgainstAI: false,
+          isOnlineMatch: true,
+        ),
       ),
     );
   }
 
   void _viewUserProfile(Map<String, dynamic> user) {
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Profil de ${user['username']}'),
-        backgroundColor: Color(0xFFe040fb),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OpponentProfileScreen(opponent: user),
       ),
     );
   }
@@ -758,7 +765,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
       body: Column(
         children: [
           Container(
-            padding: EdgeInsets.fromLTRB(16, 25, 16, 10),
+            padding: EdgeInsets.fromLTRB(16, 40, 16, 10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -837,7 +844,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                         ),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 6),
                     _buildSearchBar(),
                   ],
                 ),

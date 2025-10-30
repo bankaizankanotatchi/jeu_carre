@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
-import 'package:jeu_carre/screens/gamerule_screen.dart';
-import 'package:jeu_carre/screens/online_screen.dart';
-import 'game_screen.dart';
+import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
+import 'package:jeu_carre/screens/game_rule_screen/gamerule_screen.dart';
+import 'package:jeu_carre/screens/online_screen/online_screen.dart';
+import '../game_screen/game_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -440,8 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           onTap: () => Navigator.push(
                             context, 
                             MaterialPageRoute(
-                              builder: (context) => GameScreen(
-                                gridSize: 15,
+                              builder: (context) => GameSetupScreen(
                                 isAgainstAI: true,
                                 aiDifficulty: AIDifficulty.beginner,
                               ))),
@@ -450,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'INTERMÉDIAIRE',
                           icon: Icons.auto_awesome,
                           color: Color(0xFF9c27b0),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: true,aiDifficulty: AIDifficulty.intermediate))),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameSetupScreen(isAgainstAI: true,aiDifficulty: AIDifficulty.intermediate))),
                         ),
                        
                       ],
@@ -465,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'EXPERT',
                           icon: Icons.military_tech,
                           color: Color(0xFFff006e),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 25,isAgainstAI: true,aiDifficulty: AIDifficulty.expert,))),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameSetupScreen(isAgainstAI: true,aiDifficulty: AIDifficulty.expert,))),
                         ),
                        
                       ],
@@ -497,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               title: 'AVEC UN AMI',
                               icon: Icons.people,
                               color: Color(0xFFe040fb),
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameScreen(gridSize: 15,isAgainstAI: false,))),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameSetupScreen(isAgainstAI: false,))),
                             ),
                             _buildSimpleGameModeCard(
                               title: 'EN LIGNE',

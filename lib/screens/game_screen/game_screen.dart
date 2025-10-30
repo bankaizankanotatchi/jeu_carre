@@ -3,16 +3,24 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/models/radarpoint.dart';
-import '../models/game_model.dart';
-import '../utils/game_logic.dart';
+import '../../models/game_model.dart';
+import '../../utils/game_logic.dart';
 
 class GameScreen extends StatefulWidget {
   final int gridSize;
   final bool isAgainstAI;
   final AIDifficulty aiDifficulty;
+  final int gameDuration;
+  final int reflexionTime;
   
 
-  GameScreen({required this.gridSize, required this.isAgainstAI, this.aiDifficulty = AIDifficulty.intermediate,});
+  GameScreen({
+    required this.gridSize,
+    required this.isAgainstAI,
+    this.aiDifficulty = AIDifficulty.intermediate,// Valeur par défaut
+    this.gameDuration = 180, // Valeur par défaut
+    this.reflexionTime = 15, // Valeur par défaut
+  });
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -61,7 +69,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     {'id': '6', 'avatar': '🌟', 'username': 'StarPlayer'},
     {'id': '7', 'avatar': '🔥', 'username': 'FireSpirit'},
     {'id': '8', 'avatar': '💎', 'username': 'DiamondMind'},
-  ];
+  ];// Valeur par défaut// Valeur par défaut
 
   @override
   void initState() {
@@ -233,9 +241,9 @@ void _executeAIMove(GridPoint aiMove) {
     scores = {'bleu': 0, 'rouge': 0};
     currentPlayer = 'bleu';
     isGameFinished = false;
-    _timeRemaining = 180;
+    _timeRemaining = widget.gameDuration; // Utilisez la durée configurée
     _progressValue = 0.0;
-    _reflexionTimeRemaining = 15;
+    _reflexionTimeRemaining = widget.reflexionTime; // Utilisez le temps configuré
     _transformationController.value = Matrix4.identity();
     consecutiveMissedTurns = {'bleu': 0, 'rouge': 0};
   }
@@ -245,7 +253,7 @@ void _executeAIMove(GridPoint aiMove) {
       if (_timeRemaining > 0) {
         setState(() {
           _timeRemaining--;
-          _progressValue = 1.0 - (_timeRemaining / 180.0);
+          _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
         });
       } else {
         _endGameByTime();
@@ -307,7 +315,7 @@ void _executeAIMove(GridPoint aiMove) {
   void _resetReflexionTimer() {
     _reflexionTimer.cancel();
     setState(() {
-      _reflexionTimeRemaining = 15;
+      _reflexionTimeRemaining = widget.reflexionTime;
     });
     _startReflexionTimer();
   }
@@ -315,7 +323,7 @@ void _executeAIMove(GridPoint aiMove) {
   void _switchPlayer() {
     setState(() {
       currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-      _reflexionTimeRemaining = 15;
+      _reflexionTimeRemaining = widget.reflexionTime;
     });
   }
 
