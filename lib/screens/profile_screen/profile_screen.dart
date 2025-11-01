@@ -1,6 +1,11 @@
+// screens/profile_screen.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/player.dart';
+import 'package:jeu_carre/models/game_model.dart';
+import 'package:jeu_carre/services/game_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,43 +16,16 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Player? _currentPlayer;
+  bool _isLoading = true;
 
-  // Données fictives pour l'exemple
-  final User _currentUser = User(
-    id: '1',
-    username: 'AlexPro',
-    email: 'alex@example.com',
-    avatarUrl: null,
-    defaultEmoji: '🥇',
-    role: UserRole.player,
-    totalPoints: 2450,
-    gamesPlayed: 156,
-    gamesWon: 89,
-    gamesLost: 52,
-    gamesDraw: 15,
-    createdAt: DateTime.now().subtract(Duration(days: 120)),
-    lastLoginAt: DateTime.now(),
-    stats: UserStats(
-      dailyPoints: 45,
-      weeklyPoints: 320,
-      monthlyPoints: 1250,
-      bestGamePoints: 28,
-      winStreak: 8,
-      bestWinStreak: 12,
-      vsAIRecord: {'beginner': 25, 'intermediate': 18, 'expert': 6},
-      feedbacksSent: 12,
-      feedbacksLiked: 8,
-    ),
-  );
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final List<Map<String, dynamic>> _recentGames = [
-    {'result': 'win', 'score': '15-12', 'opponent': 'SarahShik', 'date': 'Aujourd\'hui', 'points': 15},
-    {'result': 'loss', 'score': '10-14', 'opponent': 'MikeMaster', 'date': 'Hier', 'points': 10},
-    {'result': 'win', 'score': '18-9', 'opponent': 'IA Expert', 'date': '2 jours', 'points': 18},
-    {'result': 'draw', 'score': '12-12', 'opponent': 'LunaPlay', 'date': '3 jours', 'points': 12},
-    {'result': 'win', 'score': '16-11', 'opponent': 'TomStrategy', 'date': '4 jours', 'points': 16},
-  ];
+  // Stream pour l'historique des parties
+  Stream<List<Game>>? _gameHistoryStream;
 
+  // Données fictives pour les succès
   final List<Map<String, dynamic>> _achievements = [
     {'title': 'Première Victoire', 'description': 'Gagner votre première partie', 'icon': '🏆', 'unlocked': true, 'progress': 1.0},
     {'title': 'Série de 10', 'description': 'Gagner 10 parties consécutives', 'icon': '🔥', 'unlocked': false, 'progress': 0.7},
@@ -60,6 +38,40 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadCurrentPlayer();
+  }
+
+  Future<void> _loadCurrentPlayer() async {
+    try {
+      final User? user = _auth.currentUser;
+      if (user != null) {
+        final DocumentSnapshot playerDoc = await _firestore.collection('users').doc(user.uid).get();
+        
+        if (playerDoc.exists) {
+          setState(() {
+            _currentPlayer = Player.fromMap(playerDoc.data() as Map<String, dynamic>);
+            _isLoading = false;
+          });
+          
+          // Initialiser le stream de l'historique des parties
+          _gameHistoryStream = GameService.getGameHistory(limit: 20);
+        } else {
+          print('ERREUR: Profil non trouvé pour utilisateur connecté');
+          _redirectToSignup();
+        }
+      } else {
+        _redirectToSignup();
+      }
+    } catch (e) {
+      print('Erreur chargement profil: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _redirectToSignup() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.pushReplacementNamed(context, '/signup');
+    });
   }
 
   @override
@@ -67,72 +79,153 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _tabController.dispose();
     super.dispose();
   }
-Widget _buildWinRateRing(double winPercentage, double lossPercentage, double drawPercentage) {
-  // Normaliser pour que la somme fasse 100 (ou 0 si tout est nul)
-  final total = winPercentage + lossPercentage + drawPercentage;
-  final win = total > 0 ? winPercentage / total * 100 : 0.0;
-  final loss = total > 0 ? lossPercentage / total * 100 : 0.0;
-  final draw = total > 0 ? drawPercentage / total * 100 : 0.0;
 
-  const double size = 200;
-  const double strokeWidth = 12;
+  // Méthode pour formater la date relative
+  String _formatRelativeDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inMinutes < 1) return 'À l\'instant';
+    if (difference.inHours < 1) return 'Il y a ${difference.inMinutes} min';
+    if (difference.inDays < 1) return 'Il y a ${difference.inHours} h';
+    if (difference.inDays == 1) return 'Hier';
+    if (difference.inDays < 7) return 'Il y a ${difference.inDays} jours';
+    if (difference.inDays < 30) return 'Il y a ${(difference.inDays / 7).floor()} sem';
+    return 'Il y a ${(difference.inDays / 30).floor()} mois';
+  }
 
-  return SizedBox(
-    width: size,
-    height: size,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        // Le CustomPaint dessine les arcs (défaites -> nuls -> victoires)
-        CustomPaint(
-          size: Size(size, size),
-          painter: WinRatePainter(
-            winPercent: win,
-            lossPercent: loss,
-            drawPercent: draw,
-            strokeWidth: strokeWidth,
+  // Méthode pour déterminer le résultat d'une partie pour l'utilisateur courant
+  String _getGameResult(Game game) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return 'draw';
+    
+    if (game.winnerId == null) return 'draw';
+    if (game.winnerId == currentUserId) return 'win';
+    return 'loss';
+  }
+
+  // Méthode pour obtenir le score formaté
+  String _getGameScore(Game game) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return '0-0';
+    
+    final myScore = game.scores[currentUserId] ?? 0;
+    final opponentId = game.players.firstWhere(
+      (id) => id != currentUserId && !id.startsWith('ai_'),
+      orElse: () => '',
+    );
+    
+    if (opponentId.isEmpty) {
+      // Partie contre IA
+      final aiScore = game.scores.values.firstWhere(
+        (score) => score != myScore,
+        orElse: () => 0,
+      );
+      return '$myScore-$aiScore';
+    } else {
+      // Partie contre joueur
+      final opponentScore = game.scores[opponentId] ?? 0;
+      return '$myScore-$opponentScore';
+    }
+  }
+
+  // Méthode pour obtenir le nom de l'adversaire
+  Future<String> _getOpponentName(Game game) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return 'Adversaire';
+    
+    final opponentId = game.players.firstWhere(
+      (id) => id != currentUserId && !id.startsWith('ai_'),
+      orElse: () => '',
+    );
+    
+    if (opponentId.isEmpty) {
+      // Partie contre IA
+      final aiDifficulty = game.aiDifficulty ?? 'beginner';
+      return 'IA ${aiDifficulty[0].toUpperCase()}${aiDifficulty.substring(1)}';
+    } else {
+      // Partie contre joueur
+      final opponent = await GameService.getPlayer(opponentId);
+      return opponent?.username ?? 'Joueur';
+    }
+  }
+
+  // Méthode pour obtenir les points gagnés
+  int _getPointsEarned(Game game) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return 0;
+    
+    final myScore = game.scores[currentUserId] ?? 0;
+    final result = _getGameResult(game);
+    
+    // Logique de calcul des points (à adapter selon vos règles)
+    if (result == 'win') return myScore * 2; // Bonus pour victoire
+    if (result == 'draw') return myScore;
+    return myScore ~/ 2; // Réduction pour défaite
+  }
+
+  Widget _buildWinRateRing(double winPercentage, double lossPercentage, double drawPercentage) {
+    final total = winPercentage + lossPercentage + drawPercentage;
+    final win = total > 0 ? winPercentage / total * 100 : 0.0;
+    final loss = total > 0 ? lossPercentage / total * 100 : 0.0;
+    final draw = total > 0 ? drawPercentage / total * 100 : 0.0;
+
+    const double size = 200;
+    const double strokeWidth = 12;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size(size, size),
+            painter: WinRatePainter(
+              winPercent: win,
+              lossPercent: loss,
+              drawPercent: draw,
+              strokeWidth: strokeWidth,
+            ),
           ),
-        ),
-
-        // Centre avec les pourcentages
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${winPercentage.toStringAsFixed(1)}%',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${winPercentage.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            Text(
-              'Victoires',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 14,
+              Text(
+                'Victoires',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 14,
+                ),
               ),
-            ),
-            Text(
-              '${_currentUser.gamesPlayed} parties',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
+              if (_currentPlayer != null)
+                Text(
+                  '${_currentPlayer!.gamesPlayed} parties',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildStatItem(String label, String value, Color color) {
     return Expanded(
       child: Container(
         margin: EdgeInsets.symmetric(horizontal: 5),
-        height: 100, // Hauteur fixe pour uniformiser
+        height: 100,
         padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Color(0xFF1a0033),
@@ -166,6 +259,8 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
   }
 
   Widget _buildGameResultLegend() {
+    if (_currentPlayer == null) return SizedBox();
+    
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -176,9 +271,9 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildLegendItem('Victoires', _currentUser.gamesWon, Color(0xFF00d4ff)),
-          _buildLegendItem('Nuls', _currentUser.gamesDraw, Color(0xFFFFD700)),
-          _buildLegendItem('Défaites', _currentUser.gamesLost, Color(0xFFff006e)),
+          _buildLegendItem('Victoires', _currentPlayer!.gamesWon, Color(0xFF00d4ff)),
+          _buildLegendItem('Nuls', _currentPlayer!.gamesDraw, Color(0xFFFFD700)),
+          _buildLegendItem('Défaites', _currentPlayer!.gamesLost, Color(0xFFff006e)),
         ],
       ),
     );
@@ -214,72 +309,96 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
     );
   }
 
-  Widget _buildGameHistoryItem(Map<String, dynamic> game, int index) {
-    final Color color = game['result'] == 'win' 
-      ? Color(0xFF00d4ff)
-      : game['result'] == 'loss' 
-        ? Color(0xFFff006e)
-        : Color(0xFFFFD700);
+  // WIDGET POUR L'HISTORIQUE DYNAMIQUE
+  Widget _buildGameHistoryItem(Game game, int index) {
+    return FutureBuilder<String>(
+      future: _getOpponentName(game),
+      builder: (context, opponentSnapshot) {
+        final opponentName = opponentSnapshot.data ?? 'Chargement...';
+        final result = _getGameResult(game);
+        final score = _getGameScore(game);
+        final points = _getPointsEarned(game);
+        final date = _formatRelativeDate(game.finishedAt ?? game.updatedAt);
+        
+        final Color color = result == 'win' 
+          ? Color(0xFF00d4ff)
+          : result == 'loss' 
+            ? Color(0xFFff006e)
+            : Color(0xFFFFD700);
 
-    final IconData icon = game['result'] == 'win' 
-      ? Icons.emoji_events
-      : game['result'] == 'loss' 
-        ? Icons.sentiment_dissatisfied 
-        : Icons.handshake;
+        final IconData icon = result == 'win' 
+          ? Icons.emoji_events
+          : result == 'loss' 
+            ? Icons.sentiment_dissatisfied 
+            : Icons.handshake;
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Color(0xFF4a0080)),
-      ),
-      child: ListTile(
-        leading: Container(
-          width: 40,
-          height: 40,
+        return Container(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withOpacity(0.2),
-            border: Border.all(color: color),
+            color: Color(0xFF1a0033),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Color(0xFF4a0080)),
           ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        title: Text(
-          game['opponent'],
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          game['date'],
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontSize: 12,
-          ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              game['score'],
+          child: ListTile(
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withOpacity(0.2),
+                border: Border.all(color: color),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            title: Text(
+              opponentName,
               style: TextStyle(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            Text(
-              '+${game['points']} pts',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 10,
-              ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Grille ${game.gridSize}×${game.gridSize}',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  date,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  score,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '+$points pts',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -297,7 +416,6 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
       ),
       child: Row(
         children: [
-          // Icône
           Container(
             width: 50,
             height: 50,
@@ -318,7 +436,6 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
             ),
           ),
           SizedBox(width: 16),
-          // Contenu
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,7 +468,6 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
               ],
             ),
           ),
-          // Statut
           Icon(
             achievement['unlocked'] ? Icons.verified : Icons.lock_outline,
             color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFFe040fb),
@@ -362,16 +478,19 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
   }
 
   Widget _buildStatsTab() {
-    final  totalGames = _currentUser.gamesPlayed;
-    final double winPercentage = totalGames > 0 ? (_currentUser.gamesWon / totalGames) * 100 : 0;
-    final double lossPercentage = totalGames > 0 ? (_currentUser.gamesLost / totalGames) * 100 : 0;
-    final double drawPercentage = totalGames > 0 ? (_currentUser.gamesDraw / totalGames) * 100 : 0;
+    if (_currentPlayer == null) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    final totalGames = _currentPlayer!.gamesPlayed;
+    final double winPercentage = totalGames > 0 ? (_currentPlayer!.gamesWon / totalGames) * 100 : 0;
+    final double lossPercentage = totalGames > 0 ? (_currentPlayer!.gamesLost / totalGames) * 100 : 0;
+    final double drawPercentage = totalGames > 0 ? (_currentPlayer!.gamesDraw / totalGames) * 100 : 0;
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          // Anneau des statistiques
           Container(
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -390,55 +509,54 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
           
           SizedBox(height: 20),
 
-            Row(
-                children: [
-                _buildStatItem('Points Total', _currentUser.totalPoints.toString(), Color(0xFF00d4ff)),
-                _buildStatItem('Meilleur Score', '${_currentUser.stats.bestGamePoints}', Color(0xFFe040fb)),
-                ],
-            ),
+          Row(
+            children: [
+              _buildStatItem('Points Total', _currentPlayer!.totalPoints.toString(), Color(0xFF00d4ff)),
+              _buildStatItem('Meilleur Score', '${_currentPlayer!.stats.bestGamePoints}', Color(0xFFe040fb)),
+            ],
+          ),
           SizedBox(height: 8),
-            Row(
-                children: [
-                _buildStatItem('Série de Victoire', '${_currentUser.stats.winStreak}', Color(0xFFFFD700)),
-                _buildStatItem('Parties Jouées', _currentUser.gamesPlayed.toString(), Color(0xFF9c27b0)),
-                ],
-                       ),
-           
+          Row(
+            children: [
+              _buildStatItem('Série de Victoire', '${_currentPlayer!.stats.winStreak}', Color(0xFFFFD700)),
+              _buildStatItem('Parties Jouées', _currentPlayer!.gamesPlayed.toString(), Color(0xFF9c27b0)),
+            ],
+          ),
           
           SizedBox(height: 20),
           
           // Record contre l'IA
-          Container(
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Color(0xFF1a0033),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Color(0xFF9c27b0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'RECORD DE VICTOIRE CONTRE L\'IA',
-                  style: TextStyle(
-                    color: Color(0xFFe040fb),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildIAStatItem('Débutant', _currentUser.stats.vsAIRecord['beginner']!, Color(0xFF00d4ff)),
-                    _buildIAStatItem('Intermédiaire', _currentUser.stats.vsAIRecord['intermediate']!, Color(0xFF9c27b0)),
-                    _buildIAStatItem('Expert', _currentUser.stats.vsAIRecord['expert']!, Color(0xFFff006e)),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          // Container(
+          //   padding: EdgeInsets.all(20),
+          //   decoration: BoxDecoration(
+          //     color: Color(0xFF1a0033),
+          //     borderRadius: BorderRadius.circular(20),
+          //     border: Border.all(color: Color(0xFF9c27b0)),
+          //   ),
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       Text(
+          //         'RECORD DE VICTOIRE CONTRE L\'IA',
+          //         style: TextStyle(
+          //           color: Color(0xFFe040fb),
+          //           fontSize: 16,
+          //           fontWeight: FontWeight.w900,
+          //           letterSpacing: 1.2,
+          //         ),
+          //       ),
+          //       SizedBox(height: 16),
+          //       Row(
+          //         mainAxisAlignment: MainAxisAlignment.spaceAround,
+          //         children: [
+          //           _buildIAStatItem('Débutant', _currentPlayer!.stats.vsAIRecord['beginner']!, Color(0xFF00d4ff)),
+          //           _buildIAStatItem('Intermédiaire', _currentPlayer!.stats.vsAIRecord['intermediate']!, Color(0xFF9c27b0)),
+          //           _buildIAStatItem('Expert', _currentPlayer!.stats.vsAIRecord['expert']!, Color(0xFFff006e)),
+          //         ],
+          //       ),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );
@@ -479,12 +597,99 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
     );
   }
 
+  // TAB HISTORIQUE DYNAMIQUE
   Widget _buildHistoryTab() {
-    return ListView.builder(
-      padding: EdgeInsets.symmetric(vertical: 16),
-      itemCount: _recentGames.length,
-      itemBuilder: (context, index) {
-        return _buildGameHistoryItem(_recentGames[index], index);
+    if (_gameHistoryStream == null) {
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
+        ),
+      );
+    }
+
+    return StreamBuilder<List<Game>>(
+      stream: _gameHistoryStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error, color: Colors.red, size: 50),
+                SizedBox(height: 16),
+                Text(
+                  'Erreur de chargement',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final games = snapshot.data ?? [];
+
+        if (games.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF2d0052), Color(0xFF4a0080)],
+                    ),
+                    border: Border.all(
+                      color: Color(0xFF9c27b0),
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.history,
+                    color: Color(0xFFe040fb),
+                    size: 40,
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'AUCUNE PARTIE TERMINÉE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Jouez votre première partie pour voir l\'historique ici',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          itemCount: games.length,
+          itemBuilder: (context, index) {
+            return _buildGameHistoryItem(games[index], index);
+          },
+        );
       },
     );
   }
@@ -542,11 +747,45 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Color(0xFF0a0015),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
+          ),
+        ),
+      );
+    }
+
+    if (_currentPlayer == null) {
+      return Scaffold(
+        backgroundColor: Color(0xFF0a0015),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error, color: Colors.red, size: 50),
+              SizedBox(height: 20),
+              Text(
+                'Profil non trouvé',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _loadCurrentPlayer,
+                child: Text('Réessayer'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Color(0xFF0a0015),
       body: Column(
         children: [
-          // Header du profil avec particules
           Container(
             padding: EdgeInsets.fromLTRB(16, 50, 16, 20),
             decoration: BoxDecoration(
@@ -561,13 +800,10 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
             ),
             child: Stack(
               children: [
-                // Particules animées en fond
                 ...List.generate(15, (index) => _buildAnimatedParticle(index)),
                 
-                // Contenu du header
                 Column(
                   children: [
-                    // Avatar et nom
                     Row(
                       children: [
                         Container(
@@ -589,7 +825,7 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
                           ),
                           child: Center(
                             child: Text(
-                              _currentUser.displayAvatar,
+                              _currentPlayer!.displayAvatar,
                               style: TextStyle(fontSize: 30),
                             ),
                           ),
@@ -600,7 +836,7 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _currentUser.username,
+                                _currentPlayer!.username,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 24,
@@ -609,7 +845,7 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
                               ),
                               SizedBox(height: 4),
                               Text(
-                                '${_currentUser.totalPoints} points • ${_currentUser.winRate.toStringAsFixed(1)}% victoires',
+                                '${_currentPlayer!.totalPoints} points • ${_currentPlayer!.winRate.toStringAsFixed(1)}% victoires',
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
                                   fontSize: 14,
@@ -627,7 +863,6 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
             ),
           ),
           
-          // TabBar
           Container(
             decoration: BoxDecoration(
               color: Color(0xFF1a0033),
@@ -654,7 +889,6 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
             ),
           ),
           
-          // Contenu des tabs
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -673,7 +907,7 @@ Widget _buildWinRateRing(double winPercentage, double lossPercentage, double dra
 
 // Painter pour dessiner des segments d'anneau proportionnels
 class WinRatePainter extends CustomPainter {
-  final double winPercent;  // attendu 0..100 (normalisé)
+  final double winPercent;
   final double lossPercent;
   final double drawPercent;
   final double strokeWidth;
@@ -691,20 +925,17 @@ class WinRatePainter extends CustomPainter {
     final radius = (size.width / 2) - strokeWidth / 2;
 
     final rect = Rect.fromCircle(center: center, radius: radius);
-    final startAngleBase = -pi / 2; // commence en haut
+    final startAngleBase = -pi / 2;
 
-    // Convertir pourcentages en radians (sweep angles)
     double lossSweep = (lossPercent / 100) * 2 * pi;
     double drawSweep = (drawPercent / 100) * 2 * pi;
     double winSweep = (winPercent / 100) * 2 * pi;
 
-    // Peintures
     final backgroundPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..color = Color(0xFF2d0052);
 
-    // Fond complet (optionnel, pour voir l'anneau)
     canvas.drawCircle(center, radius, backgroundPaint);
 
     final lossPaint = Paint()
@@ -725,7 +956,6 @@ class WinRatePainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt
       ..color = Color(0xFF00d4ff);
 
-    // Dessiner les arcs dans l'ordre : défaites, nuls, victoires
     double currentStart = startAngleBase;
 
     if (lossSweep > 0) {
@@ -742,7 +972,6 @@ class WinRatePainter extends CustomPainter {
       canvas.drawArc(rect, currentStart, winSweep, false, winPaint);
     }
 
-    // Optionnel : contour fin autour pour "adoucir"
     final outerBorder = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1

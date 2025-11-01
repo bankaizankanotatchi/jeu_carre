@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
 import 'package:jeu_carre/screens/game_rule_screen/gamerule_screen.dart';
 import 'package:jeu_carre/screens/online_screen/online_screen.dart';
-import '../game_screen/game_screen.dart';
+import 'package:jeu_carre/services/ranking_service.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -18,30 +20,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final ScrollController _scrollController = ScrollController();
   double _scrollOffset = 0.0;
 
-  // Données fictives pour le classement
-  final List<Map<String, dynamic>> _dailyRanking = [
-    {'name': 'AlexPro', 'score': 2450, 'avatar': '🥇', 'trend': 'up'},
-    {'name': 'SarahShik', 'score': 2380, 'avatar': '🥈', 'trend': 'up'},
-    {'name': 'MikeMaster', 'score': 2310, 'avatar': '🥉', 'trend': 'down'},
-    {'name': 'LunaPlay', 'score': 2250, 'avatar': '👑', 'trend': 'up'},
-    {'name': 'TomStrategy', 'score': 2190, 'avatar': '⚡', 'trend': 'up'},
-  ];
-
-  final List<Map<String, dynamic>> _weeklyRanking = [
-    {'name': 'ProPlayerX', 'score': 15600, 'avatar': '🥇', 'trend': 'up'},
-    {'name': 'ShikakuQueen', 'score': 14850, 'avatar': '🥈', 'trend': 'stable'},
-    {'name': 'GridMaster', 'score': 14200, 'avatar': '🥉', 'trend': 'down'},
-    {'name': 'BrainStorm', 'score': 13800, 'avatar': '👑', 'trend': 'up'},
-    {'name': 'LogicLegend', 'score': 13200, 'avatar': '⚡', 'trend': 'up'},
-  ];
-
-  final List<Map<String, dynamic>> _monthlyRanking = [
-    {'name': 'UltimateGamer', 'score': 58900, 'avatar': '🥇', 'trend': 'up'},
-    {'name': 'StrategyKing', 'score': 57400, 'avatar': '🥈', 'trend': 'stable'},
-    {'name': 'MindMaster', 'score': 56200, 'avatar': '🥉', 'trend': 'up'},
-    {'name': 'ShikakuPro', 'score': 55100, 'avatar': '👑', 'trend': 'down'},
-    {'name': 'GridGenius', 'score': 53800, 'avatar': '⚡', 'trend': 'up'},
-  ];
+  // Données de classement
+  List<Map<String, dynamic>> _dailyRanking = [];
+  List<Map<String, dynamic>> _weeklyRanking = [];
+  List<Map<String, dynamic>> _monthlyRanking = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  StreamSubscription? _dailySubscription;
+  StreamSubscription? _weeklySubscription;
+  StreamSubscription? _monthlySubscription;
 
   @override
   void initState() {
@@ -60,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     
     _animationController.forward();
+    _loadRankings();
 
     // Écouter le défilement pour les effets parallax
     _scrollController.addListener(() {
@@ -69,10 +57,136 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     });
   }
 
+  Future<void> _loadRankings() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      // Charger les classements depuis Firebase en temps réel
+      _loadRealTimeRankings();
+
+    } catch (e) {
+      print('Erreur initialisation classements: $e');
+      _handleError('Erreur de chargement des classements');
+    }
+  }
+
+  void _loadRealTimeRankings() {
+    try {
+      // Classement du jour
+      _dailySubscription = RankingService.getDailyRanking(limit: 5).listen(
+        (players) {
+          try {
+            final formatted = RankingService.formatRankingData(players, 'daily');
+            if (mounted) {
+              setState(() {
+                _dailyRanking = formatted['players'];
+                _isLoading = false;
+              });
+            }
+          } catch (e) {
+            print('Erreur formatage classement jour: $e');
+            _handleError('Erreur de formatage des données');
+          }
+        },
+        onError: (error) {
+          print('Erreur stream classement jour: $error');
+          _handleError('Erreur connexion classement jour');
+        },
+        cancelOnError: false,
+      );
+
+      // Classement de la semaine
+      _weeklySubscription = RankingService.getWeeklyRanking(limit: 5).listen(
+        (players) {
+          try {
+            final formatted = RankingService.formatRankingData(players, 'weekly');
+            if (mounted) {
+              setState(() {
+                _weeklyRanking = formatted['players'];
+                _isLoading = false;
+              });
+            }
+          } catch (e) {
+            print('Erreur formatage classement semaine: $e');
+            _handleError('Erreur de formatage des données');
+          }
+        },
+        onError: (error) {
+          print('Erreur stream classement semaine: $error');
+          _handleError('Erreur connexion classement semaine');
+        },
+        cancelOnError: false,
+      );
+
+      // Classement du mois
+      _monthlySubscription = RankingService.getMonthlyRanking(limit: 5).listen(
+        (players) {
+          try {
+            final formatted = RankingService.formatRankingData(players, 'monthly');
+            if (mounted) {
+              setState(() {
+                _monthlyRanking = formatted['players'];
+                _isLoading = false;
+              });
+            }
+          } catch (e) {
+            print('Erreur formatage classement mois: $e');
+            _handleError('Erreur de formatage des données');
+          }
+        },
+        onError: (error) {
+          print('Erreur stream classement mois: $error');
+          _handleError('Erreur connexion classement mois');
+        },
+        cancelOnError: false,
+      );
+
+    } catch (e) {
+      print('Erreur initialisation streams: $e');
+      _handleError('Erreur de connexion aux serveurs');
+    }
+  }
+
+  void _handleError(String message) {
+    if (mounted) {
+      setState(() {
+        _errorMessage = message;
+        _isLoading = false;
+      });
+    }
+    
+    // Afficher un snackbar d'erreur
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_errorMessage!),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
+
+  void _retryLoadRankings() {
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
+    _loadRankings();
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
     _scrollController.dispose();
+    _dailySubscription?.cancel();
+    _weeklySubscription?.cancel();
+    _monthlySubscription?.cancel();
     super.dispose();
   }
 
@@ -137,6 +251,30 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 SizedBox(height: 20),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: RankingService.getPlatformStats(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return _buildLoadingStats();
+                    }
+                    
+                    if (snapshot.hasError) {
+                      return _buildStatsError();
+                    }
+                    
+                    final stats = snapshot.data ?? {};
+                    
+                    return Column(
+                      children: [
+                        _buildStatItem('Joueurs inscrits', '${stats['totalPlayers'] ?? 0}'),
+                        _buildStatItem('Parties jouées', '${stats['totalGames'] ?? 0}'),
+                        _buildStatItem('Actifs aujourd\'hui', '${stats['activeToday'] ?? 0}'),
+                        _buildStatItem('Points totaux', '${stats['totalPoints'] ?? 0}'),
+                      ],
+                    );
+                  },
+                ),
+                SizedBox(height: 20),
                 Text(
                   'Le jeu de stratégie ultime où l\'intelligence et la rapidité font la différence. Défiez vos amis, affrontez l\'IA et devenez le maître du Shikaku!',
                   textAlign: TextAlign.center,
@@ -178,6 +316,87 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLoadingStats() {
+    return Column(
+      children: [
+        _buildStatItemShimmer('Joueurs inscrits'),
+        _buildStatItemShimmer('Parties jouées'),
+        _buildStatItemShimmer('Actifs aujourd\'hui'),
+        _buildStatItemShimmer('Points totaux'),
+      ],
+    );
+  }
+
+  Widget _buildStatsError() {
+    return Column(
+      children: [
+        _buildStatItem('Joueurs inscrits', '--'),
+        _buildStatItem('Parties jouées', '--'),
+        _buildStatItem('Actifs aujourd\'hui', '--'),
+        _buildStatItem('Points totaux', '--'),
+      ],
+    );
+  }
+
+  Widget _buildStatItemShimmer(String label) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 12,
+            ),
+          ),
+          Container(
+            width: 40,
+            height: 12,
+            color: Colors.white.withOpacity(0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: Color(0xFF00d4ff),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -247,12 +466,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
-          // SliverAppBar avec effet parallax
           SliverAppBar(
             expandedHeight: 200.0,
             floating: false,
@@ -281,7 +498,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // 🌈 Dégradé violet en fond
                       Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
@@ -296,8 +512,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                         ),
                       ),
-
-                      // 🟪 Dessin personnalisé par-dessus
                       CustomPaint(
                         painter: SquareFormationPainter(),
                         size: Size.infinite,
@@ -346,7 +560,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ],
           ),
-          // Contenu principal
           SliverToBoxAdapter(
             child: Container(
               decoration: BoxDecoration(
@@ -429,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   ),
 
-                  // Cartes des niveaux IA - MODIFIÉ EN ROW
+                  // Cartes des niveaux IA
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
@@ -452,7 +665,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           color: Color(0xFF9c27b0),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameSetupScreen(isAgainstAI: true,aiDifficulty: AIDifficulty.intermediate))),
                         ),
-                       
                       ],
                     ),
                   ),
@@ -467,15 +679,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           color: Color(0xFFff006e),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => GameSetupScreen(isAgainstAI: true,aiDifficulty: AIDifficulty.expert,))),
                         ),
-                       
                       ],
                     ),
                   ),
-                  
 
                   SizedBox(height: 40),
 
-                  // Section Multijoueur - MODIFIÉ EN ROW
+                  // Section Multijoueur
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 10),
                     child: Column(
@@ -516,8 +726,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                   // Section Classement
                   SizedBox(height: 40),
-
-                  // Section Classement
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
@@ -545,16 +753,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   ),
 
-                  // Classement du jour
-                  _buildRankingSection('DU JOUR', _dailyRanking, Color(0xFF00d4ff)),
-                  SizedBox(height: 40),
-
-                  // Classement de la semaine
-                  _buildRankingSection('DE LA SEMAINE', _weeklyRanking, Color(0xFFe040fb)),
-                  SizedBox(height: 40),
-
-                  // Classement du mois
-                  _buildRankingSection('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
+                  // Classements
+                  if (_errorMessage != null)
+                    _buildErrorState()
+                  else if (_isLoading)
+                    _buildLoadingRankings()
+                  else
+                    Column(
+                      children: [
+                        _buildRankingSection('DU JOUR', _dailyRanking, Color(0xFF00d4ff)),
+                        SizedBox(height: 40),
+                        _buildRankingSection('DE LA SEMAINE', _weeklyRanking, Color(0xFFe040fb)),
+                        SizedBox(height: 40),
+                        _buildRankingSection('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
+                      ],
+                    ),
+                  
                   SizedBox(height: 80),
                 ],
               ),
@@ -565,7 +779,132 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Color color) {
+  Widget _buildErrorState() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 50,
+          ),
+          SizedBox(height: 16),
+          Text(
+            _errorMessage ?? 'Erreur de chargement',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 20),
+          Container(
+            width: 200,
+            height: 50,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(15),
+                onTap: _retryLoadRankings,
+                child: Center(
+                  child: Text(
+                    'RÉESSAYER',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingRankings() {
+    return Column(
+      children: [
+        _buildRankingSectionShimmer('DU JOUR', Color(0xFF00d4ff)),
+        SizedBox(height: 40),
+        _buildRankingSectionShimmer('DE LA SEMAINE', Color(0xFFe040fb)),
+        SizedBox(height: 40),
+        _buildRankingSectionShimmer('DU MOIS', Color(0xFFFFD700)),
+      ],
+    );
+  }
+
+  Widget _buildRankingSectionShimmer(String title, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
+        SizedBox(
+          height: 140,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            children: List.generate(5, (index) => _buildRankingItemShimmer(color)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRankingItemShimmer(Color color) {
+    return Container(
+      margin: EdgeInsets.only(right: 20),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withOpacity(0.3),
+            ),
+          ),
+          SizedBox(height: 12),
+          Container(
+            width: 90,
+            height: 16,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          SizedBox(height: 4),
+          Container(
+            width: 60,
+            height: 14,
+            color: color.withOpacity(0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Color color) {
+  final hasPlayers = ranking.isNotEmpty;
+  
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -582,188 +921,226 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
       ),
       SizedBox(height: 16),
-      SizedBox(
-        height: 140,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          children: ranking.asMap().entries.map((entry) {
-            final index = entry.key;
-            final player = entry.value;
-            final rank = index + 1;
-            
-            return Container(
-              margin: EdgeInsets.only(right: 20),
-              child: Column(
-                children: [
-                  // Avatar avec double bordure et numéro
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Bordure externe
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              color.withOpacity(0.8),
-                              color.withOpacity(0.4),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Bordure interne
-                      Container(
-                        width: 75,
-                        height: 75,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF2d0052),
-                          border: Border.all(
-                            color: color,
-                            width: 3,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            player['avatar'],
-                            style: TextStyle(fontSize: 24),
-                          ),
-                        ),
-                      ),
-                      // Numéro de classement qui déborde
-                      Positioned(
-                        left: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 28,
-                          height: 28,
+      
+      if (!hasPlayers)
+        // Message quand le classement est vide
+        Container(
+          width: double.infinity,
+          height: 140,
+          margin: EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.1),
+                color.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withOpacity(0.3),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.emoji_events_outlined,
+                color: color.withOpacity(0.5),
+                size: 40,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Aucun joueur pour le moment',
+                style: TextStyle(
+                  color: color.withOpacity(0.7),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Soyez le premier à marquer des points!',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        )
+      else
+        // Classement normal quand il y a des joueurs
+        SizedBox(
+          height: 140,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            children: ranking.asMap().entries.map((entry) {
+              final index = entry.key;
+              final player = entry.value;
+              final rank = index + 1;
+              
+              return Container(
+                margin: EdgeInsets.only(right: 20),
+                child: Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
                           decoration: BoxDecoration(
-                            color: color,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
+                            gradient: LinearGradient(
+                              colors: [
+                                color.withOpacity(0.8),
+                                color.withOpacity(0.4),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 75,
+                          height: 75,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF2d0052),
+                            border: Border.all(
+                              color: color,
+                              width: 3,
+                            ),
                           ),
                           child: Center(
                             child: Text(
-                              '$rank',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
+                              player['avatar'],
+                              style: TextStyle(fontSize: 24),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                '$rank',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      // Indicateur de tendance
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF2d0052),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: player['trend'] == 'up' ? Colors.green : 
-                                     player['trend'] == 'down' ? Colors.red : Colors.yellow,
-                              width: 2,
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Color(0xFF2d0052),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: player['trend'] == 'up' ? Colors.green : 
+                                       player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                                width: 2,
+                              ),
                             ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              player['trend'] == 'up' ? Icons.arrow_upward : 
-                              player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
-                              color: player['trend'] == 'up' ? Colors.green : 
-                                     player['trend'] == 'down' ? Colors.red : Colors.yellow,
-                              size: 12,
+                            child: Center(
+                              child: Icon(
+                                player['trend'] == 'up' ? Icons.arrow_upward : 
+                                player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
+                                color: player['trend'] == 'up' ? Colors.green : 
+                                       player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                                size: 12,
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  // Nom du joueur avec ellipse si trop long
-                  Container(
-                    width: 90,
-                    child: Column(
-                      children: [
-                        Text(
-                          _truncateName(player['name']),
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          '${player['score']} pts',
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                    SizedBox(height: 12),
+                    Container(
+                      width: 90,
+                      child: Column(
+                        children: [
+                          Text(
+                            _truncateName(player['name']),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            '${player['score']} pts',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
         ),
-      ),
     ],
   );
 }
-
-  // Méthode utilitaire pour tronquer les noms longs
   String _truncateName(String name) {
     if (name.length <= 15) return name;
     return '${name.substring(0, 14)}..';
   }
-
 }
 
+// [Garder la classe SquareFormationPainter exactement comme avant]
 class SquareFormationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    const int gridCount = 7; // 7 colonnes / 7 lignes
+    const int gridCount = 7;
     final cellSize = size.width / gridCount;
 
-    // 🧱 Grille
     final gridPaint = Paint()
       ..color = const Color(0xFF6200b3).withOpacity(0.3)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
-    // Lignes verticales
     for (int i = 0; i <= gridCount; i++) {
       final x = i * cellSize;
       canvas.drawLine(Offset(x, 0), Offset(x, gridCount * cellSize), gridPaint);
     }
 
-    // Lignes horizontales
     for (int j = 0; j <= gridCount; j++) {
       final y = j * cellSize;
       canvas.drawLine(Offset(0, y), Offset(gridCount * cellSize, y), gridPaint);
     }
 
-    // 🔵 Points de la grille
     final pointPaint = Paint()..style = PaintingStyle.fill;
     for (int x = 0; x <= gridCount; x++) {
       for (int y = 0; y <= gridCount; y++) {
@@ -772,7 +1149,6 @@ class SquareFormationPainter extends CustomPainter {
       }
     }
 
-    // 🎨 Peintures carrés
     final squarePaintBlue = Paint()
       ..color = const Color(0xFF00d4ff).withOpacity(0.3)
       ..style = PaintingStyle.fill;
@@ -789,7 +1165,6 @@ class SquareFormationPainter extends CustomPainter {
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
 
-    // 🟦 Carré bleu (2x2 cellules en haut à gauche)
     final squareRectBlue = Rect.fromPoints(
       Offset(cellSize * 1 + 2, cellSize * 1 + 2),
       Offset(cellSize * 2 - 2, cellSize * 2 - 2),
@@ -799,7 +1174,6 @@ class SquareFormationPainter extends CustomPainter {
       Offset(cellSize * 6 - 2, cellSize * 1 - 2),
     );
 
-    // 🔴 Carré rouge (2x2 cellules au centre-bas)
     final squareRectRed = Rect.fromPoints(
       Offset(cellSize * 3 + 2, cellSize * 2 + 2),
       Offset(cellSize * 4 - 2, cellSize * 3 - 2),
@@ -809,7 +1183,6 @@ class SquareFormationPainter extends CustomPainter {
       Offset(cellSize * 5 - 2, cellSize * 3 - 2),
     );
 
-    // Dessin des carrés
     canvas.drawRect(squareRectBlue, squarePaintBlue);
     canvas.drawRect(squareRectBlue, squareBorderBlue);
     canvas.drawRect(squareRectBlue2, squarePaintBlue);
@@ -819,11 +1192,9 @@ class SquareFormationPainter extends CustomPainter {
     canvas.drawRect(squareRectRed2, squarePaintRed);
     canvas.drawRect(squareRectRed2, squareBorderRed);
 
-    // 🌟 Points de surbrillance (coins)
     final highlightPaintBlue = Paint()..color = const Color(0xFF00d4ff);
     final highlightPaintRed = Paint()..color = const Color(0xFFc4005a);
 
-    // Coins du carré bleu
     final blueCorners = [
       Offset(cellSize * 1, cellSize * 1),
       Offset(cellSize * 2, cellSize * 1),
@@ -834,7 +1205,6 @@ class SquareFormationPainter extends CustomPainter {
       canvas.drawCircle(c, 5, highlightPaintBlue);
     }
 
-    // Coins du carré rouge
     final redCorners = [
       Offset(cellSize * 3, cellSize * 2),
       Offset(cellSize * 4, cellSize * 2),
@@ -845,7 +1215,6 @@ class SquareFormationPainter extends CustomPainter {
       canvas.drawCircle(c, 5, highlightPaintRed);
     }
 
-    // 🎲 Points décoratifs (quelques positions pour enrichir la grille)
     canvas.drawCircle(Offset(cellSize * 3, cellSize * 1), 5, highlightPaintBlue);
     canvas.drawCircle(Offset(cellSize * 1, cellSize * 5), 5, highlightPaintBlue);
     canvas.drawCircle(Offset(cellSize * 5, cellSize * 0), 5, highlightPaintBlue);

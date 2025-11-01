@@ -2,7 +2,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:jeu_carre/screens/login_screen.dart';
+import 'package:jeu_carre/services/minio_storage_service.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
+import 'package:jeu_carre/models/player.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -13,9 +20,48 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   File? _selectedImage;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  final MinioStorageService _minioStorage = MinioStorageService();
+
+  // Avant de créer le profil, vérifier que MinIO est healthy
+  Future<void> _checkMinioHealth() async {
+    final bool isHealthy = await _minioStorage.checkHealth();
+    if (!isHealthy) {
+      throw Exception('MinIO storage n\'est pas disponible');
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeGoogleSignIn();
+  }
+
+  Future<void> _initializeGoogleSignIn() async {
+    // Initialiser GoogleSignIn avec les client IDs
+    await _googleSignIn.initialize();
+    
+    // Démarrer l'authentification légère
+    _googleSignIn.attemptLightweightAuthentication();
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage() async {
     try {
@@ -32,22 +78,186 @@ class _SignupScreenState extends State<SignupScreen> {
         });
       }
     } catch (e) {
-      _showError('Erreur lors de la sélection de l\'image');
+      _showError('Erreur lors de la sélection de l\'image: $e');
     }
   }
 
-  Future<void> _signUpWithGoogle() async {
-    setState(() => _isLoading = true);
-    
-    // Simuler un délai de connexion
-    await Future.delayed(const Duration(seconds: 2));
-    
-    // Ici vous intégrerez votre logique d'authentification Google
-    _completeSignup();
+  Future<String?> _uploadImage(File image, String userId) async {
+    try {
+      final Reference storageRef = _storage.ref().child('user_avatars/$userId.jpg');
+      final UploadTask uploadTask = storageRef.putFile(image);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      print('Erreur upload image: $e');
+      return null;
+    }
   }
 
-  Future<void> _signUpWithUsername() async {
+  Future<void> _createPlayerProfile(User user, String username, String? avatarUrl) async {
+    // // Vérifier la santé de MinIO
+    // await _checkMinioHealth();
+
+    // String? finalAvatarUrl = avatarUrl;
+    // if (_selectedImage != null) {
+    //   try {
+    //     finalAvatarUrl = await _minioStorage.uploadUserAvatar(_selectedImage!, user.uid);
+    //     print('Avatar uploadé avec succès: $finalAvatarUrl');
+    //   } catch (e) {
+    //     print('Erreur upload avatar, utilisation avatar par défaut: $e');
+    //     // Continuer sans avatar
+    //   }
+    // }
+
+    final player = Player(
+      id: user.uid,
+      username: username,
+      email: user.email ?? '',
+      avatarUrl: avatarUrl, // URL MinIO maintenant
+      defaultEmoji: '😊',
+      role: UserRole.player,
+      totalPoints: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      gamesDraw: 0,
+      createdAt: DateTime.now(),
+      lastLoginAt: DateTime.now(),
+      stats: UserStats(
+        dailyPoints: 0,
+        weeklyPoints: 0,
+        monthlyPoints: 0,
+        bestGamePoints: 0,
+        winStreak: 0,
+        bestWinStreak: 0,
+        vsAIRecord: {'beginner': 0, 'intermediate': 0, 'expert': 0},
+        feedbacksSent: 0,
+        feedbacksLiked: 0,
+      ),
+      isOnline: true,
+      inGame: false,
+      achievements: [],
+      statusMessage: 'Nouveau joueur !',
+    );
+
+    await _firestore.collection('users').doc(user.uid).set(player.toMap());
+  }
+  
+Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) async {
+  try {
+    // Récupérer l'authentification via la nouvelle méthode
+    final GoogleSignInAuthentication? googleAuth = await googleUser.authentication;
+    
+    if (googleAuth == null || googleAuth.idToken == null) {
+      throw Exception('Authentication Google échouée - tokens manquants');
+    }
+    
+    // NOUVELLE API : utiliser les getters corrects
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+    );
+
+    // Connexion à Firebase
+    final UserCredential userCredential = await _auth.signInWithCredential(credential);
+    final User? user = userCredential.user;
+
+    if (user != null) {
+      // Vérifier si le joueur existe déjà
+      final playerDoc = await _firestore.collection('users').doc(user.uid).get();
+      
+      if (!playerDoc.exists) {
+        // Nouveau joueur - créer le profil avec le nom choisi
+        String? avatarUrl;
+        if (_selectedImage != null) {
+          avatarUrl = await _uploadImage(_selectedImage!, user.uid);
+        } else {
+          // Optionnel : utiliser la photo Google si pas de photo sélectionnée
+          final photoUrl = googleUser.photoUrl;
+          if (photoUrl != null) {
+            avatarUrl = photoUrl;
+          }
+        }
+
+        await _createPlayerProfile(user, username, avatarUrl);
+      } else {
+        // Joueur existant - mettre à jour le statut
+        await _firestore.collection('users').doc(user.uid).update({
+          'isOnline': true,
+          'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+
+      _completeSignup();
+    }
+  } catch (e) {
+    throw Exception('Erreur traitement utilisateur Google: $e');
+  }
+}
+
+  Future<void> _signUpWithGoogle() async {
     final username = _usernameController.text.trim();
+    
+    // VÉRIFIER QUE LE NOM EST SAISI
+    if (username.isEmpty) {
+      _showError('Veuillez entrer un nom de joueur');
+      return;
+    }
+    
+    if (username.length < 3) {
+      _showError('Le nom d\'utilisateur doit contenir au moins 3 caractères');
+      return;
+    }
+
+    // VÉRIFIER L'UNICITÉ DU NOM
+    setState(() => _isLoading = true);
+    final bool isUnique = await _isUsernameUnique(username);
+    
+    if (!isUnique) {
+      _showError('Ce nom de joueur est déjà utilisé');
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      
+      await _handleGoogleUser(googleUser, username);
+      
+    } catch (e) {
+      _showError('Erreur Google Sign-In: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Nouvelle méthode pour vérifier l'unicité du nom
+  Future<bool> _isUsernameUnique(String username) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      return querySnapshot.docs.isEmpty;
+    } catch (e) {
+      print('Erreur vérification nom: $e');
+      return false;
+    }
+  }
+
+  // Modifier _signUpWithEmail pour inclure la vérification
+  Future<void> _signUpWithEmail() async {
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
     
     if (username.isEmpty) {
       _showError('Veuillez entrer un nom d\'utilisateur');
@@ -58,13 +268,64 @@ class _SignupScreenState extends State<SignupScreen> {
       _showError('Le nom d\'utilisateur doit contenir au moins 3 caractères');
       return;
     }
+
+    // VÉRIFIER L'UNICITÉ DU NOM
+    setState(() => _isLoading = true);
+    final bool isUnique = await _isUsernameUnique(username);
+    setState(() => _isLoading = false);
+
+    if (!isUnique) {
+      _showError('Ce nom de joueur est déjà utilisé');
+      return;
+    }
+
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Veuillez entrer un email valide');
+      return;
+    }
+
+    if (password.length < 6) {
+      _showError('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
     
     setState(() => _isLoading = true);
     
-    // Simuler un délai d'inscription
-    await Future.delayed(const Duration(seconds: 1));
-    
-    _completeSignup();
+    try {
+      // Créer le joueur avec email/mot de passe
+      final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      final User? user = userCredential.user;
+      
+      if (user != null) {
+        // Uploader l'image si sélectionnée
+        String? avatarUrl;
+        if (_selectedImage != null) {
+          avatarUrl = await _uploadImage(_selectedImage!, user.uid);
+        }
+
+        // Créer le profil joueur
+        await _createPlayerProfile(user, username, avatarUrl);
+        _completeSignup();
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = 'Erreur d\'inscription';
+      if (e.code == 'email-already-in-use') {
+        errorMessage = 'Cet email est déjà utilisé';
+      } else if (e.code == 'weak-password') {
+        errorMessage = 'Le mot de passe est trop faible';
+      } else if (e.code == 'invalid-email') {
+        errorMessage = 'Email invalide';
+      }
+      _showError('$errorMessage: ${e.message}');
+    } catch (e) {
+      _showError('Erreur inattendue: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _completeSignup() {
@@ -243,6 +504,118 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  Widget _buildEmailField() {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF2d0052),
+            Color(0xFF1a0033),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFF9c27b0),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF9c27b0).withOpacity(0.2),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Entrez votre email',
+          hintStyle: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 16,
+          ),
+          prefixIcon: Icon(
+            Icons.email_outlined,
+            color: Colors.white.withOpacity(0.7),
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF2d0052),
+            Color(0xFF1a0033),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFF9c27b0),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF9c27b0).withOpacity(0.2),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _passwordController,
+        obscureText: _obscurePassword,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Entrez votre mot de passe',
+          hintStyle: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 16,
+          ),
+          prefixIcon: Icon(
+            Icons.lock_outline,
+            color: Colors.white.withOpacity(0.7),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+              color: Colors.white.withOpacity(0.7),
+            ),
+            onPressed: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
+        ),
+      ),
+    );
+  }
   Widget _buildGoogleSignInButton() {
     return Container(
       height: 60,
@@ -280,7 +653,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(6),
                   child: Image.asset(
-                    'assets/images/google.png', // Vous devrez ajouter cette image
+                    'assets/images/google.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -301,7 +674,44 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildUsernameSignInButton() {
+    Widget _buildLoginButton() {
+    return Container(
+      height: 55,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: const Color(0xFF00d4ff),
+          width: 2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: _isLoading ? null : _navigateToLogin,
+          child: Center(
+            child: Text(
+              'Déjà un compte ? Se connecter',
+              style: TextStyle(
+                color: const Color(0xFF00d4ff),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToLogin() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginScreen()),
+    );
+  }
+
+  Widget _buildEmailSignInButton() {
     return Container(
       height: 60,
       decoration: BoxDecoration(
@@ -324,7 +734,7 @@ class _SignupScreenState extends State<SignupScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(15),
-          onTap: _isLoading ? null : _signUpWithUsername,
+          onTap: _isLoading ? null : _signUpWithEmail,
           child: Center(
             child: _isLoading
                 ? const SizedBox(
@@ -423,6 +833,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 // Champ nom d'utilisateur
                 _buildUsernameField(),
                 
+                // Champs email et mot de passe (pour inscription email)
+                _buildEmailField(),
+                _buildPasswordField(),
+                
                 const SizedBox(height: 30),
                 
                 // Bouton Google
@@ -449,7 +863,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        'SHIKAKU',
+                        'OU',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.6),
                           fontWeight: FontWeight.w700,
@@ -472,6 +886,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   ],
                 ),
                 
+                const SizedBox(height: 20),
+                
+                // Bouton inscription email
+                _buildEmailSignInButton(),
+
+                const SizedBox(height: 20),
+                
+                // Bouton "Se connecter"
+                _buildLoginButton(),
                 
                 const SizedBox(height: 30),
                 
@@ -494,11 +917,5 @@ class _SignupScreenState extends State<SignupScreen> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    super.dispose();
   }
 }

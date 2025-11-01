@@ -1,5 +1,9 @@
+// screens/online_users_screen.dart
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/profil_adversaire/profil_adversaire.dart';
 
 class OnlineUsersScreen extends StatefulWidget {
@@ -14,133 +18,17 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  // Données fictives pour les utilisateurs en ligne
-  final List<Map<String, dynamic>> _onlineUsers = [
-    {
-      'id': '1',
-      'username': 'AlexPro',
-      'avatar': '🥇',
-      'score': 2450,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '2',
-      'username': 'SarahShik',
-      'avatar': '🥈',
-      'score': 2380,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': true,
-    },
-    {
-      'id': '3',
-      'username': 'MikeMaster',
-      'avatar': '🥉',
-      'score': 2310,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '4',
-      'username': 'LunaPlay',
-      'avatar': '👑',
-      'score': 2250,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': true,
-    },
-    {
-      'id': '5',
-      'username': 'TomStrategy',
-      'avatar': '⚡',
-      'score': 2190,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '6',
-      'username': 'ProPlayerX',
-      'avatar': '🔥',
-      'score': 2150,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': true,
-    },
-    {
-      'id': '7',
-      'username': 'ShikakuQueen',
-      'avatar': '🌟',
-      'score': 2100,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '8',
-      'username': 'GridMaster',
-      'avatar': '🎯',
-      'score': 2050,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '9',
-      'username': 'BrainStorm',
-      'avatar': '💡',
-      'score': 2000,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '10',
-      'username': 'LogicLegend',
-      'avatar': '🧠',
-      'score': 1950,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '11',
-      'username': 'UltimateGamer',
-      'avatar': '🎮',
-      'score': 1900,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-    {
-      'id': '12',
-      'username': 'StrategyKing',
-      'avatar': '♔',
-      'score': 1850,
-      'status': 'en_ligne',
-      'lastSeen': DateTime.now(),
-      'inGame': false,
-    },
-  ];
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  List<Map<String, dynamic>> get _filteredUsers {
-    if (_searchQuery.isEmpty) {
-      return _onlineUsers;
-    }
-    return _onlineUsers.where((user) {
-      final username = user['username'].toString().toLowerCase();
-      return username.contains(_searchQuery.toLowerCase());
-    }).toList();
-  }
+  Stream<List<Player>>? _onlineUsersStream;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _searchController.addListener(_onSearchChanged);
+    _loadOnlineUsers();
   }
 
   @override
@@ -149,6 +37,17 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     _searchController.dispose();
     super.dispose();
   }
+
+void _loadOnlineUsers() {
+  _onlineUsersStream = _firestore
+      .collection('users')
+      .where('isOnline', isEqualTo: true)
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => Player.fromMap(doc.data()))
+          .where((player) => player.id != _getCurrentUserId()) // Filtre côté client
+          .toList());
+}
 
   void _onSearchChanged() {
     setState(() {
@@ -161,6 +60,20 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
       _searchController.clear();
       _searchQuery = '';
     });
+  }
+
+  List<Player> _filterUsers(List<Player> users) {
+    if (_searchQuery.isEmpty) {
+      return users;
+    }
+    return users.where((user) {
+      final username = user.username.toLowerCase();
+      return username.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  String _getCurrentUserId() {
+    return _auth.currentUser?.uid ?? '';
   }
 
   Widget _buildSearchBar() {
@@ -229,7 +142,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     );
   }
 
-  Widget _buildSearchResultsInfo() {
+  Widget _buildSearchResultsInfo(List<Player> filteredUsers) {
     if (_searchQuery.isEmpty) return SizedBox.shrink();
 
     return Padding(
@@ -238,14 +151,14 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            '${_filteredUsers.length} résultat${_filteredUsers.length > 1 ? 's' : ''} trouvé${_filteredUsers.length > 1 ? 's' : ''}',
+            '${filteredUsers.length} résultat${filteredUsers.length > 1 ? 's' : ''} trouvé${filteredUsers.length > 1 ? 's' : ''}',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (_filteredUsers.isEmpty)
+          if (filteredUsers.isEmpty)
             Text(
               'Aucun joueur trouvé',
               style: TextStyle(
@@ -300,7 +213,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     );
   }
 
-  Widget _buildUserAvatar(Map<String, dynamic> user) {
+  Widget _buildUserAvatar(Player user) {
     return Container(
       margin: EdgeInsets.all(8),
       child: Column(
@@ -341,7 +254,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                 ),
                 child: Center(
                   child: Text(
-                    user['avatar'],
+                    user.displayAvatar,
                     style: TextStyle(fontSize: 24),
                   ),
                 ),
@@ -353,7 +266,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                   width: 18,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: user['inGame'] ? Colors.orange : Colors.green,
+                    color: user.inGame ? Colors.orange : Colors.green,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: Colors.white,
@@ -377,7 +290,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
             child: Column(
               children: [
                 Text(
-                  _truncateName(user['username']),
+                  _truncateName(user.username),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -395,112 +308,77 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     );
   }
 
-  Widget _buildUserGrid() {
-    final usersToDisplay = _filteredUsers;
+Widget _buildUserGrid(List<Player> users) {
+  final usersToDisplay = _filterUsers(users);
 
-    if (usersToDisplay.isEmpty && _searchQuery.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF2d0052),
-                    Color(0xFF4a0080),
-                  ],
-                ),
-                border: Border.all(
-                  color: Color(0xFF9c27b0),
-                  width: 2,
-                ),
+  // Cette condition ne devrait plus être nécessaire car gérée dans le StreamBuilder
+  // Mais on la garde pour sécurité
+  if (usersToDisplay.isEmpty) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF2d0052),
+                  Color(0xFF4a0080),
+                ],
               ),
-              child: Icon(
-                Icons.search_off,
-                color: Color(0xFFe040fb),
-                size: 40,
+              border: Border.all(
+                color: Color(0xFF9c27b0),
+                width: 2,
               ),
             ),
-            SizedBox(height: 20),
-            Text(
-              'AUCUN JOUEUR TROUVÉ',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
+            child: Icon(
+              Icons.people_outline,
+              color: Color(0xFFe040fb),
+              size: 40,
             ),
-            SizedBox(height: 12),
-            Text(
-              'Aucun résultat pour "$_searchQuery"',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 14,
-              ),
-            ),
-            SizedBox(height: 20),
-            Container(
-              width: 200,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFe040fb), Color(0xFF9c27b0)],
-                ),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: _clearSearch,
-                  child: Center(
-                    child: Text(
-                      'EFFACER LA RECHERCHE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: EdgeInsets.all(16),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: usersToDisplay.length,
-      itemBuilder: (context, index) {
-        final user = usersToDisplay[index];
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              _showUserProfile(user);
-            },
-            child: _buildUserAvatar(user),
           ),
-        );
-      },
+          SizedBox(height: 20),
+          Text(
+            'AUCUN JOUEUR DISPONIBLE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showUserProfile(Map<String, dynamic> user) {
+  return GridView.builder(
+    padding: EdgeInsets.all(16),
+    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 3,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 16,
+      childAspectRatio: 0.8,
+    ),
+    itemCount: usersToDisplay.length,
+    itemBuilder: (context, index) {
+      final user = usersToDisplay[index];
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            _showUserProfile(user);
+          },
+          child: _buildUserAvatar(user),
+        ),
+      );
+    },
+  );
+}
+  void _showUserProfile(Player user) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -564,7 +442,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                       ),
                       child: Center(
                         child: Text(
-                          user['avatar'],
+                          user.displayAvatar,
                           style: TextStyle(fontSize: 30),
                         ),
                       ),
@@ -576,7 +454,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                         width: 20,
                         height: 20,
                         decoration: BoxDecoration(
-                          color: user['inGame'] ? Colors.orange : Colors.green,
+                          color: user.inGame ? Colors.orange : Colors.green,
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white,
@@ -589,7 +467,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                 ),
                 SizedBox(height: 20),
                 Text(
-                  user['username'],
+                  user.username,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -598,7 +476,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '${user['score']} points',
+                  '${user.totalPoints} points',
                   style: TextStyle(
                     color: Color(0xFF00d4ff),
                     fontSize: 16,
@@ -606,7 +484,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                   ),
                 ),
                 
-                if (user['inGame']) ...[
+                if (user.inGame) ...[
                   SizedBox(height: 20),
                   Container(
                     padding: EdgeInsets.all(16),
@@ -639,7 +517,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                 
                 SizedBox(height: 20),
                 
-                if (user['inGame']) 
+                if (user.inGame) 
                   _buildProfileActionButton('PROFIL', Icons.person, Color(0xFFe040fb), user, true)
                 else 
                   Row(
@@ -687,7 +565,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     );
   }
 
-  Widget _buildProfileActionButton(String text, IconData icon, Color color, Map<String, dynamic> user, bool isInGame) {
+  Widget _buildProfileActionButton(String text, IconData icon, Color color, Player user, bool isInGame) {
     return Container(
       width: isInGame ? 200 : 120,
       height: 50,
@@ -702,6 +580,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
         child: InkWell(
           borderRadius: BorderRadius.circular(15),
           onTap: () {
+            Navigator.of(context).pop(); // Fermer le dialog
             if (text == 'DÉFIER') {
               _challengeUser(user);
             } else if (text == 'PROFIL') {
@@ -728,8 +607,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
     );
   }
 
-  void _challengeUser(Map<String, dynamic> user) {
-    Navigator.of(context).pop(); // Ferme le dialog de profil
+  void _challengeUser(Player user) {
     
     // Redirige vers le screen de configuration pour un match en ligne
     Navigator.push(
@@ -738,17 +616,22 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
         builder: (context) => GameSetupScreen(
           isAgainstAI: false,
           isOnlineMatch: true,
+          opponent: user, // Passer l'adversaire
         ),
       ),
     );
   }
 
-  void _viewUserProfile(Map<String, dynamic> user) {
-    Navigator.of(context).pop();
+  void _viewUserProfile(Player user) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => OpponentProfileScreen(opponent: user),
+        builder: (context) => OpponentProfileScreen(opponent: {
+          'id': user.id,
+          'username': user.username,
+          'avatar': user.displayAvatar,
+          'score': user.totalPoints,
+        }),
       ),
     );
   }
@@ -815,12 +698,20 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                                 ),
                               ),
                               SizedBox(height: 4),
-                              Text(
-                                '${_onlineUsers.length} joueurs connectés • ${_onlineUsers.where((user) => user['inGame']).length} en match',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 12,
-                                ),
+                              StreamBuilder<List<Player>>(
+                                stream: _onlineUsersStream,
+                                builder: (context, snapshot) {
+                                  final onlineCount = snapshot.data?.length ?? 0;
+                                  final inGameCount = snapshot.data?.where((user) => user.inGame).length ?? 0;
+                                  
+                                  return Text(
+                                    '$onlineCount joueurs connectés • $inGameCount en match',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -838,7 +729,9 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                             padding: EdgeInsets.zero,
                             icon: Icon(Icons.refresh, color: Colors.white, size: 20),
                             onPressed: () {
-                              setState(() {});
+                              setState(() {
+                                _loadOnlineUsers();
+                              });
                             },
                           ),
                         ),
@@ -852,10 +745,214 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
             ),
           ),
           
-          _buildSearchResultsInfo(),
-          
+StreamBuilder<List<Player>>(
+  stream: _onlineUsersStream,
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return Expanded(
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
+          ),
+        ),
+      );
+    }
+
+  if (snapshot.hasError) {
+  // DEBUG: Afficher l'erreur complète dans la console
+  print('ERREUR OnlineUsersScreen: ${snapshot.error}');
+  print('Type d\'erreur: ${snapshot.error.runtimeType}');
+  print('Stack trace: ${snapshot.stackTrace}');
+
+  String errorMessage = 'Problème de connexion';
+  String errorDetail = 'Vérifiez votre connexion Internet';
+  
+  final errorString = snapshot.error.toString();
+  
+  // Diagnostic de l'erreur avec plus de cas
+  if (errorString.contains('Firebase') || errorString.contains('firebase')) {
+    errorMessage = 'ERREUR FIREBASE';
+    errorDetail = 'Problème avec le serveur';
+  } else if (errorString.contains('Network') || errorString.contains('network') || errorString.contains('socket') || errorString.contains('Internet')) {
+    errorMessage = 'HORS LIGNE';
+    errorDetail = 'Connexion Internet requise';
+  } else if (errorString.contains('permission') || errorString.contains('Permission') || errorString.contains('access')) {
+    errorMessage = 'ACCÈS REFUSÉ';
+    errorDetail = 'Permissions insuffisantes';
+  } else if (errorString.contains('timeout') || errorString.contains('Timeout')) {
+    errorMessage = 'TIMEOUT';
+    errorDetail = 'La connexion a expiré';
+  } else if (errorString.contains('host') || errorString.contains('Host')) {
+    errorMessage = 'HOST INACCESSIBLE';
+    errorDetail = 'Serveur non disponible';
+  }
+
+  // Afficher aussi l'erreur exacte dans l'UI pour debug
+  errorDetail += '\n\n(Erreur: ${errorString.length > 50 ? errorString.substring(0, 50) + '...' : errorString})';
+
+    return Expanded(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icône d'erreur
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Color(0xFF2d0052),
+                    Color(0xFF1a0033),
+                  ],
+                ),
+                border: Border.all(
+                  color: Color(0xFFff006e),
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFFff006e).withOpacity(0.3),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFff006e),
+                size: 50,
+              ),
+            ),
+            
+            SizedBox(height: 25),
+            
+            // Message d'erreur
+            Text(
+              errorMessage,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+            
+            SizedBox(height: 12),
+            
+            // Détail de l'erreur
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                errorDetail,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            
+            SizedBox(height: 30),
+            
+            // Bouton retour
+            Container(
+              width: 160,
+              height: 45,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: Color(0xFF00d4ff),
+                  width: 2,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: () => Navigator.pop(context),
+                  child: Center(
+                    child: Text(
+                      'RETOUR',
+                      style: TextStyle(
+                        color: Color(0xFF00d4ff),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+    final users = snapshot.data ?? [];
+    final filteredUsers = _filterUsers(users);
+
+    // AFFICHER "AUCUN JOUEUR" SI LA LISTE EST VIDE
+    if (users.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF2d0052),
+                      Color(0xFF4a0080),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Color(0xFF9c27b0),
+                    width: 2,
+                  ),
+                ),
+                child: Icon(
+                  Icons.people_outline,
+                  color: Color(0xFFe040fb),
+                  size: 40,
+                ),
+              ),
+              SizedBox(height: 20),
+              Text(
+                'AUCUN JOUEUR EN LIGNE',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Revenez plus tard pour trouver des adversaires',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Expanded(
+      child: Column(
+        children: [
+          _buildSearchResultsInfo(filteredUsers),
           Expanded(
-            child: _filteredUsers.isEmpty && _searchQuery.isEmpty
+            child: filteredUsers.isEmpty && _searchQuery.isNotEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -877,14 +974,14 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                             ),
                           ),
                           child: Icon(
-                            Icons.people_outline,
+                            Icons.search_off,
                             color: Color(0xFFe040fb),
                             size: 40,
                           ),
                         ),
                         SizedBox(height: 20),
                         Text(
-                          'AUCUN JOUEUR EN LIGNE',
+                          'AUCUN JOUEUR TROUVÉ',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -893,17 +990,50 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> with SingleTicker
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'Revenez plus tard pour trouver des adversaires',
+                          'Aucun résultat pour "$_searchQuery"',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.7),
                             fontSize: 14,
                           ),
                         ),
+                        SizedBox(height: 20),
+                        Container(
+                          width: 200,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFe040fb), Color(0xFF9c27b0)],
+                            ),
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(22),
+                              onTap: _clearSearch,
+                              child: Center(
+                                child: Text(
+                                  'EFFACER LA RECHERCHE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   )
-                : _buildUserGrid(),
+                : _buildUserGrid(users),
           ),
+        ],
+      ),
+    );
+  },
+),
         ],
       ),
     );

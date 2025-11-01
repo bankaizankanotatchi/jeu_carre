@@ -1,7 +1,7 @@
 // ============================================
 // MODÈLE UTILISATEUR
 // ============================================
-class User {
+class Player {
   final String id;
   final String username;
   final String email;
@@ -17,8 +17,14 @@ class User {
   final DateTime lastLoginAt;
   final UserStats stats;
   final bool isActive;
+    // PROPRIÉTÉS CONSERVÉES (essentielles pour le frontend)
+  final bool isOnline;          // Pour OnlineUsersScreen
+  final bool inGame;           // Pour voir qui est en jeu
+  final String? currentGameId; // Pour rejoindre une partie
+  final List<String> achievements; // Pour ProfileScreen
+  final String statusMessage;  // Optionnel pour le profil
 
-  User({
+  Player({
     required this.id,
     required this.username,
     required this.email,
@@ -34,7 +40,13 @@ class User {
     required this.lastLoginAt,
     required this.stats,
     this.isActive = true,
-  });
+   // Propriétés conservées
+    this.isOnline = false,
+    this.inGame = false,
+    this.currentGameId,
+    List<String>? achievements,
+    this.statusMessage = '',
+  }) : achievements = achievements ?? [];
 
   // Avatar à afficher (image prioritaire, sinon emoji)
   String get displayAvatar => avatarUrl ?? defaultEmoji;
@@ -74,11 +86,17 @@ class User {
       'lastLoginAt': lastLoginAt.millisecondsSinceEpoch,
       'stats': stats.toMap(),
       'isActive': isActive,
+      // Nouvelles propriétés conservées
+      'isOnline': isOnline,
+      'inGame': inGame,
+      'currentGameId': currentGameId,
+      'achievements': achievements,
+      'statusMessage': statusMessage,
     };
   }
 
-  static User fromMap(Map<String, dynamic> map) {
-    return User(
+  static Player fromMap(Map<String, dynamic> map) {
+    return Player(
       id: map['id'],
       username: map['username'],
       email: map['email'],
@@ -94,11 +112,17 @@ class User {
       lastLoginAt: DateTime.fromMillisecondsSinceEpoch(map['lastLoginAt']),
       stats: UserStats.fromMap(map['stats']),
       isActive: map['isActive'] ?? true,
+      // Nouvelles propriétés conservées
+      isOnline: map['isOnline'] ?? false,
+      inGame: map['inGame'] ?? false,
+      currentGameId: map['currentGameId'],
+      achievements: List<String>.from(map['achievements'] ?? []),
+      statusMessage: map['statusMessage'] ?? '',
     );
   }
 
   // Créer une copie avec des modifications
-  User copyWith({
+  Player copyWith({
     String? username,
     String? email,
     String? avatarUrl,
@@ -113,7 +137,7 @@ class User {
     UserStats? stats,
     bool? isActive,
   }) {
-    return User(
+    return Player(
       id: this.id,
       username: username ?? this.username,
       email: email ?? this.email,
@@ -129,7 +153,7 @@ class User {
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       stats: stats ?? this.stats,
       isActive: isActive ?? this.isActive,
-    );
+  ) ;
   }
 }
 

@@ -1,17 +1,23 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
+import 'package:jeu_carre/models/game_request.dart';
+import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_screen/game_screen.dart';
+import 'package:jeu_carre/services/game_service.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final bool isAgainstAI;
   final AIDifficulty? aiDifficulty;
   final bool isOnlineMatch;
+  final Player? opponent; // Nouveau paramètre
 
   const GameSetupScreen({
     Key? key,
     required this.isAgainstAI,
     this.aiDifficulty,
     this.isOnlineMatch = false,
+    this.opponent, // Nouveau paramètre
   }) : super(key: key);
 
   @override
@@ -27,12 +33,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
   int _selectedGridSize = 15;
   int _selectedGameDuration = 180; // en secondes
   int _selectedReflexionTime = 15; // en secondes
-  bool _isWaitingForOpponent = false;
 
   // Options disponibles
   final List<int> _gridSizeOptions = [15, 20, 25, 30];
   final List<int> _gameDurationOptions = [180, 300, 600, 900]; // 1, 2, 3, 5 minutes
-  final List<int> _reflexionTimeOptions = [5,10, 15, 20]; // secondes
+  final List<int> _reflexionTimeOptions = [5, 10, 15, 20]; // secondes
 
   @override
   void initState() {
@@ -52,10 +57,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
     
     _animationController.forward();
 
-    // Si c'est un match en ligne, simuler l'attente d'un adversaire
-    if (widget.isOnlineMatch) {
-      _startWaitingForOpponent();
-    }
   }
 
   @override
@@ -64,20 +65,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
     super.dispose();
   }
 
-  void _startWaitingForOpponent() {
-    setState(() {
-      _isWaitingForOpponent = true;
-    });
-
-    // Simuler la recherche d'un adversaire (à remplacer par la logique réseau réelle)
-    Future.delayed(Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isWaitingForOpponent = false;
-        });
-      }
-    });
-  }
 
   void _startGame() {
     Navigator.pushReplacement(
@@ -89,38 +76,121 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
           aiDifficulty: widget.aiDifficulty ?? AIDifficulty.intermediate,
           gameDuration: _selectedGameDuration,
           reflexionTime: _selectedReflexionTime,
+          opponentId: widget.opponent?.id, // Passer l'ID de l'adversaire
         ),
       ),
     );
   }
+void _sendMatchRequest() async {
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Vous devez être connecté pour envoyer un défi'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-  void _showChallengeSentDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF2d0052),
-                  Color(0xFF1a0033),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(
-                color: Color(0xFF9c27b0),
-                width: 2,
-              ),
+    if (widget.opponent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Aucun adversaire sélectionné'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Créer la demande de match avec les paramètres configurés
+    final matchRequest = MatchRequest(
+      id: GameService.generateId(),
+      fromUserId: currentUser.uid,
+      toUserId: widget.opponent!.id,
+      gridSize: _selectedGridSize,
+      gameDuration: _selectedGameDuration,
+      reflexionTime: _selectedReflexionTime,
+      status: MatchRequestStatus.pending,
+      createdAt: DateTime.now(),
+      expiresAt: DateTime.now().add(Duration(minutes: 30)), // Expire dans 30 minutes
+    );
+
+    // Envoyer la demande via GameService
+    await GameService.sendMatchRequest(matchRequest);
+
+    // Afficher le message de confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Défi envoyé à ${widget.opponent!.username} !'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+
+    // Fermer cet écran et revenir en arrière
+    Navigator.pop(context);
+
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erreur: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+void _showChallengeSentDialog() {
+  final opponentName = widget.opponent?.username ?? 'votre adversaire';
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF2d0052),
+                Color(0xFF1a0033),
+              ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: Color(0xFF9c27b0),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Avatar de l'adversaire si disponible
+              if (widget.opponent != null)
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                    ),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      widget.opponent!.displayAvatar,
+                      style: TextStyle(fontSize: 30),
+                    ),
+                  ),
+                )
+              else
                 Container(
                   width: 80,
                   height: 80,
@@ -138,65 +208,148 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
                   ),
                   child: Icon(Icons.send, color: Colors.white, size: 40),
                 ),
-                SizedBox(height: 20),
-                Text(
-                  'DÉFI ENVOYÉ !',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
+              
+              SizedBox(height: 16),
+              
+              Text(
+                widget.opponent != null 
+                  ? 'Votre défi sera envoyé à $opponentName\navec les paramètres suivants :'
+                  : 'Recherche d\'un adversaire de niveau similaire...',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 16,
                 ),
+              ),
+
+              // Afficher les paramètres du défi
+              if (widget.opponent != null) ...[
                 SizedBox(height: 16),
-                Text(
-                  'En attente de la réponse de votre adversaire...',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 16,
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Color(0xFF00d4ff), width: 1),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildChallengeParam('Grille', '${_selectedGridSize}×${_selectedGridSize}'),
+                      _buildChallengeParam('Durée', '${_selectedGameDuration ~/ 60} minutes'),
+                      _buildChallengeParam('Temps par tour', '${_selectedReflexionTime} secondes'),
+                    ],
                   ),
                 ),
-                SizedBox(height: 24),
-                Container(
-                  width: double.infinity,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: Color(0xFF9c27b0),
-                      width: 2,
-                    ),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(15),
-                      onTap: () => {
-                        Navigator.of(context).pop(),
-                        Navigator.of(context).pop(),
-                        Navigator.of(context).pop(),
-                        },
-                      child: Center(
-                        child: Text(
-                          'Retour a l\'accueil',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
+              ],
+              
+              SizedBox(height: 24),
+              
+              Row(
+                children: [
+                  // Bouton Annuler
+                  Expanded(
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: Color(0xFF9c27b0),
+                          width: 2,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(15),
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            Navigator.of(context).pop();
+                          },
+                          child: Center(
+                            child: Text(
+                              'ANNULER',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  
+                  SizedBox(width: 12),
+                  
+                  // Bouton Envoyer
+                  Expanded(
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                        ),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(15),
+                          onTap: () {
+                            Navigator.of(context).pop(); // Fermer le dialog
+                            _sendMatchRequest(); // Envoyer la demande
+                          },
+                          child: Center(
+                            child: Text(
+                              'CONFIRMER',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
+Widget _buildChallengeParam(String title, String value) {
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 14,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: Color(0xFF00d4ff),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+ 
   Widget _buildSettingCard({
     required String title,
     required String description,
@@ -334,90 +487,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildWaitingForOpponent() {
-    return Column(
-      children: [
-        SizedBox(height: 40),
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                Color(0xFF00d4ff).withOpacity(0.8),
-                Color(0xFF0099cc).withOpacity(0.3),
-              ],
-            ),
-            border: Border.all(
-              color: Color(0xFF00d4ff),
-              width: 3,
-            ),
-          ),
-          child: Icon(
-            Icons.people_alt,
-            color: Colors.white,
-            size: 60,
-          ),
-        ),
-        SizedBox(height: 24),
-        Text(
-          'RECHERCHE D\'ADVERSAIRE...',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        SizedBox(height: 16),
-        Text(
-          'Nous cherchons un joueur de niveau similaire\npour vous défier !',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 16,
-          ),
-        ),
-        SizedBox(height: 24),
-        CircularProgressIndicator(
-          color: Color(0xFF00d4ff),
-          strokeWidth: 4,
-        ),
-        SizedBox(height: 20),
-        Container(
-          width: 200,
-          height: 50,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: Color(0xFF9c27b0),
-              width: 2,
-            ),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(15),
-              onTap: () => Navigator.pop(context),
-              child: Center(
-                child: Text(
-                  'ANNULER',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildConfigurationScreen() {
-
     String difficultyText = '';
 
     switch (widget.aiDifficulty) {
@@ -461,7 +531,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
                 children: [
                   Text(
                     widget.isOnlineMatch 
-                        ? 'MATCH EN LIGNE'
+                        ? widget.opponent != null 
+                            ? 'DÉFI EN LIGNE'
+                            : 'MATCH EN LIGNE'
                         : widget.isAgainstAI 
                             ? 'CONTRE L\'IA'
                             : 'AVEC UN AMI',
@@ -475,9 +547,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
                   SizedBox(height: 8),
                   Text(
                     widget.isOnlineMatch
-                        ? 'Configurez votre match et défiez un adversaire en ligne'
+                        ? widget.opponent != null
+                            ? 'Configurez votre défi contre ${widget.opponent!.username}'
+                            : 'Configurez votre match et défiez un adversaire en ligne'
                         : widget.isAgainstAI
-                            ? 'Affrontez notre ia de niveau $difficultyText'
+                            ? 'Affrontez notre IA de niveau $difficultyText'
                             : 'Préparez-vous pour un match en local passionnant',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -572,7 +646,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
                   onTap: widget.isOnlineMatch ? _showChallengeSentDialog : _startGame,
                   child: Center(
                     child: Text(
-                      widget.isOnlineMatch ? 'DÉFIER UN JOUEUR' : 'COMMENCER LA PARTIE',
+                      widget.isOnlineMatch 
+                          ? widget.opponent != null 
+                              ? 'ENVOYER LE DÉFI'
+                              : 'CHERCHER UN ADVERSAIRE'
+                          : 'COMMENCER LA PARTIE',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -669,9 +747,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
 
               // Contenu principal
               Expanded(
-                child: _isWaitingForOpponent 
-                    ? _buildWaitingForOpponent()
-                    : _buildConfigurationScreen(),
+                child:  _buildConfigurationScreen(),
               ),
             ],
           ),

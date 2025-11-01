@@ -1,11 +1,16 @@
-// main.dart (version mise à jour)
+// main.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/firebase_options.dart';
+import 'package:jeu_carre/screens/login_screen.dart';
 import 'package:jeu_carre/screens/navigation_screen.dart';
 import 'package:jeu_carre/screens/first_launch_rules_screen.dart';
 import 'package:jeu_carre/screens/signup_screen.dart';
+import 'package:jeu_carre/services/match_request_notification.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
+import 'package:jeu_carre/services/presence_service.dart';
+import 'package:jeu_carre/services/game_start_service.dart'; // 🔥 AJOUTER
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,10 +18,13 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,105 +33,126 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const AppInitializer(),
+      home: const MainWrapper(), // 🔥 REMPLACER AppInitializer par MainWrapper
       routes: {
         '/home': (context) => const NavigationScreen(),
         '/signup': (context) => const SignupScreen(),
+        '/login': (context) => LoginScreen(),
+        '/rules': (context) => const FirstLaunchRulesScreen(),
       },
+      // Clé de navigation globale pour accéder au contexte partout
+      navigatorKey: GlobalKey<NavigatorState>(),
     );
   }
 }
 
-class AppInitializer extends StatefulWidget {
-  const AppInitializer({super.key});
+// 🔥 AJOUTER CE CODE - MainWrapper qui remplace AppInitializer
+class MainWrapper extends StatefulWidget {
+  const MainWrapper({super.key});
 
   @override
-  State<AppInitializer> createState() => _AppInitializerState();
+  State<MainWrapper> createState() => _MainWrapperState();
 }
 
-class _AppInitializerState extends State<AppInitializer> {
-  late Future<bool> _isFirstLaunch;
+class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
+  final PresenceService _presenceService = PresenceService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final MatchNotificationService _matchNotificationService = MatchNotificationService();
+  final GameStartService _gameStartService = GameStartService(); // 🔥 NOUVEAU SERVICE
 
   @override
   void initState() {
     super.initState();
-    _isFirstLaunch = PreferencesService.isFirstLaunch();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Mettre en ligne immédiatement si connecté
+    _updatePresenceStatus(true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _updatePresenceStatus(false);
+    _matchNotificationService.dispose();
+    _gameStartService.dispose(); // 🔥 NETTOYER LE NOUVEAU SERVICE
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _updatePresenceStatus(true);
+        _matchNotificationService.restart();
+        _gameStartService.restart(); // 🔥 REDÉMARRER LE SERVICE
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        _updatePresenceStatus(false);
+        _matchNotificationService.stop();
+        _gameStartService.stop(); // 🔥 ARRÊTER LE SERVICE
+        break;
+    }
+  }
+
+  Future<void> _updatePresenceStatus(bool isOnline) async {
+    final User? user = _auth.currentUser;
+    if (user != null) {
+      if (isOnline) {
+        await _presenceService.setUserOnline();
+      } else {
+        await _presenceService.setUserOffline();
+      }
+    }
+  }
+
+  /// Détermine quel écran afficher en fonction du statut
+  Future<Widget> _determineHomeScreen() async {
+    // 1. Vérifier si c'est le premier lancement
+    final bool isFirstLaunch = await PreferencesService.isFirstLaunch();
+    
+    if (isFirstLaunch) {
+      // Premier lancement : afficher les règles
+      return const FirstLaunchRulesScreen();
+    }
+    
+    // 2. Vérifier si l'utilisateur est connecté
+    final User? currentUser = _auth.currentUser;
+    
+    if (currentUser == null) {
+      // Pas connecté : rediriger vers l'inscription
+      return const SignupScreen();
+    }
+    
+    // 3. Utilisateur connecté : initialiser TOUS les services
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _matchNotificationService.initialize(context);
+       _gameStartService.initialize(context); // 🔥 INITIALISER LE SERVICE
+      }
+    });
+    
+    return const NavigationScreen();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _isFirstLaunch,
+    return FutureBuilder<Widget>(
+      future: _determineHomeScreen(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingScreen();
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
-        final isFirstLaunch = snapshot.data ?? true;
-        
-        if (isFirstLaunch) {
-          return const FirstLaunchRulesScreen();
-        } else {
-          return const NavigationScreen();
-        }
+        // Écran à afficher (avec tous les services initialisés)
+        return snapshot.data ?? const SignupScreen();
       },
-    );
-  }
-
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0a0015),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: const RadialGradient(
-                  colors: [
-                    Color(0xFF00d4ff),
-                    Color(0xFF0099cc),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00d4ff).withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.games,
-                color: Colors.white,
-                size: 40,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'SHIKAKU',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const SizedBox(
-              width: 40,
-              height: 40,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

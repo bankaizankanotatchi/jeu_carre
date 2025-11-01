@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
 
@@ -14,40 +15,57 @@ class OpponentProfileScreen extends StatefulWidget {
 
 class _OpponentProfileScreenState extends State<OpponentProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Player? _opponentPlayer;
+  bool _isLoading = true;
 
-  // Créer un User à partir des données de l'adversaire
-  User get _opponentUser => User(
-    id: widget.opponent['id'] ?? '1',
-    username: widget.opponent['username'] ?? 'Joueur',
-    email: '',
-    avatarUrl: null,
-    defaultEmoji: widget.opponent['avatar'] ?? '👤',
-    role: UserRole.player,
-    totalPoints: widget.opponent['score'] ?? 0,
-    gamesPlayed: 120,
-    gamesWon: 65,
-    gamesLost: 45,
-    gamesDraw: 10,
-    createdAt: DateTime.now().subtract(Duration(days: 90)),
-    lastLoginAt: DateTime.now(),
-    stats: UserStats(
-      dailyPoints: 35,
-      weeklyPoints: 280,
-      monthlyPoints: 1100,
-      bestGamePoints: 25,
-      winStreak: 5,
-      bestWinStreak: 10,
-      vsAIRecord: {'beginner': 20, 'intermediate': 15, 'expert': 4},
-      feedbacksSent: 8,
-      feedbacksLiked: 6,
-    ),
-  );
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 1, vsync: this); // Un seul tab maintenant
+    _tabController = TabController(length: 1, vsync: this);
+    _loadOpponentData();
   }
+
+  Future<void> _loadOpponentData() async {
+    try {
+      final opponentId = widget.opponent['id'];
+      if (opponentId != null) {
+        final DocumentSnapshot playerDoc = await _firestore.collection('users').doc(opponentId).get();
+        
+        if (playerDoc.exists) {
+          setState(() {
+            _opponentPlayer = Player.fromMap(playerDoc.data() as Map<String, dynamic>);
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+      // Si le joueur n'existe pas en base ou pas d'ID, on utilise juste les données de base
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Erreur chargement profil adversaire: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Getters simples pour accéder aux données
+  String get _displayUsername => _opponentPlayer?.username ?? widget.opponent['username'] ?? 'Joueur';
+  String get _displayAvatar => _opponentPlayer?.displayAvatar ?? widget.opponent['avatar'] ?? '👤';
+  int get _displayScore => _opponentPlayer?.totalPoints ?? widget.opponent['score'] ?? 0;
+  bool get _isOnline => _opponentPlayer?.isOnline ?? widget.opponent['isOnline'] ?? false;
+  bool get _inGame => _opponentPlayer?.inGame ?? widget.opponent['inGame'] ?? false;
+  double get _winRate => _opponentPlayer?.winRate ?? 0.0;
+  int get _gamesPlayed => _opponentPlayer?.gamesPlayed ?? 0;
+  int get _gamesWon => _opponentPlayer?.gamesWon ?? 0;
+  int get _gamesLost => _opponentPlayer?.gamesLost ?? 0;
+  int get _gamesDraw => _opponentPlayer?.gamesDraw ?? 0;
+  int get _bestGamePoints => _opponentPlayer?.stats.bestGamePoints ?? 0;
+  int get _winStreak => _opponentPlayer?.stats.winStreak ?? 0;
 
   @override
   void dispose() {
@@ -56,14 +74,105 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   }
 
   void _challengeOpponent() {
+    if (_inGame) {
+      _showAlreadyInGameDialog();
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => GameSetupScreen(
           isAgainstAI: false,
           isOnlineMatch: true,
+          opponent: _opponentPlayer, // Passer l'adversaire
         ),
       ),
+    );
+  }
+
+  void _showAlreadyInGameDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF2d0052),
+                  Color(0xFF1a0033),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(
+                color: Color(0xFF9c27b0),
+                width: 2,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.sports_esports,
+                  color: Colors.orange,
+                  size: 50,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'JOUEUR OCCUPÉ',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  '$_displayUsername est actuellement en partie.\nRevenez plus tard pour le défier !',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Center(
+                        child: Text(
+                          'COMPRIS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -110,7 +219,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                 ),
               ),
               Text(
-                '${_opponentUser.gamesPlayed} parties',
+                '$_gamesPlayed parties',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 12,
@@ -171,9 +280,9 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildLegendItem('Victoires', _opponentUser.gamesWon, Color(0xFF00d4ff)),
-          _buildLegendItem('Nuls', _opponentUser.gamesDraw, Color(0xFFFFD700)),
-          _buildLegendItem('Défaites', _opponentUser.gamesLost, Color(0xFFff006e)),
+          _buildLegendItem('Victoires', _gamesWon, Color(0xFF00d4ff)),
+          _buildLegendItem('Nuls', _gamesDraw, Color(0xFFFFD700)),
+          _buildLegendItem('Défaites', _gamesLost, Color(0xFFff006e)),
         ],
       ),
     );
@@ -210,10 +319,17 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   }
 
   Widget _buildStatsTab() {
-    final totalGames = _opponentUser.gamesPlayed;
-    final double winPercentage = totalGames > 0 ? (_opponentUser.gamesWon / totalGames) * 100 : 0;
-    final double lossPercentage = totalGames > 0 ? (_opponentUser.gamesLost / totalGames) * 100 : 0;
-    final double drawPercentage = totalGames > 0 ? (_opponentUser.gamesDraw / totalGames) * 100 : 0;
+    if (_isLoading) {
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00d4ff)),
+        ),
+      );
+    }
+
+    final double winPercentage = _gamesPlayed > 0 ? (_gamesWon / _gamesPlayed) * 100 : 0;
+    final double lossPercentage = _gamesPlayed > 0 ? (_gamesLost / _gamesPlayed) * 100 : 0;
+    final double drawPercentage = _gamesPlayed > 0 ? (_gamesDraw / _gamesPlayed) * 100 : 0;
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -239,19 +355,93 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
 
           Row(
             children: [
-              _buildStatItem('Points Total', _opponentUser.totalPoints.toString(), Color(0xFF00d4ff)),
-              _buildStatItem('Meilleur Score', '${_opponentUser.stats.bestGamePoints}', Color(0xFFe040fb)),
+              _buildStatItem('Points Total', _displayScore.toString(), Color(0xFF00d4ff)),
+              _buildStatItem('Meilleur Score', '$_bestGamePoints', Color(0xFFe040fb)),
             ],
           ),
           SizedBox(height: 8),
           Row(
             children: [
-              _buildStatItem('Série de Victoire', '${_opponentUser.stats.winStreak}', Color(0xFFFFD700)),
-              _buildStatItem('Parties Jouées', _opponentUser.gamesPlayed.toString(), Color(0xFF9c27b0)),
+              _buildStatItem('Série de Victoire', '$_winStreak', Color(0xFFFFD700)),
+              _buildStatItem('Parties Jouées', '$_gamesPlayed', Color(0xFF9c27b0)),
             ],
           ),
           
           SizedBox(height: 20),
+          
+          // Bouton Défier
+          if (!_inGame)
+            Container(
+              width: double.infinity,
+              height: 60,
+              margin: EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF00d4ff).withOpacity(0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(15),
+                  onTap: _challengeOpponent,
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.sports_esports, color: Colors.white, size: 24),
+                        SizedBox(width: 12),
+                        Text(
+                          'DÉFIER CE JOUEUR',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              height: 60,
+              margin: EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.orange, width: 2),
+              ),
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.schedule, color: Colors.orange, size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      'JOUEUR EN PARTIE',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -304,7 +494,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
       backgroundColor: Color(0xFF0a0015),
       body: Column(
         children: [
-          // Header du profil avec bouton Défier et flèche retour
           Container(
             padding: EdgeInsets.fromLTRB(16, 50, 16, 20),
             decoration: BoxDecoration(
@@ -323,10 +512,8 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                 
                 Column(
                   children: [
-                    // Avatar, nom et bouton Défier
                     Row(
                       children: [
-                        // Flèche de retour
                         Container(
                           width: 40,
                           height: 40,
@@ -362,7 +549,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                           ),
                           child: Center(
                             child: Text(
-                              _opponentUser.displayAvatar,
+                              _displayAvatar,
                               style: TextStyle(fontSize: 30),
                             ),
                           ),
@@ -373,7 +560,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _opponentUser.username,
+                                _displayUsername,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 24,
@@ -382,16 +569,56 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                               ),
                               SizedBox(height: 4),
                               Text(
-                                '${_opponentUser.totalPoints} points • ${_opponentUser.winRate.toStringAsFixed(1)}% victoires',
+                                '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
                                   fontSize: 14,
                                 ),
                               ),
+                              SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _isOnline ? Colors.green : Colors.grey,
+                                    ),
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    _isOnline ? 'En ligne' : 'Hors ligne',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  if (_inGame) ...[
+                                    SizedBox(width: 12),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.orange),
+                                      ),
+                                      child: Text(
+                                        'En jeu',
+                                        style: TextStyle(
+                                          color: Colors.orange,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ],
                           ),
                         ),
-                        ],
+                      ],
                     ),
                     SizedBox(height: 10),
                   ],
@@ -400,7 +627,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
             ),
           ),
           
-          // TabBar (un seul tab maintenant)
           Container(
             decoration: BoxDecoration(
               color: Color(0xFF1a0033),
@@ -425,7 +651,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
             ),
           ),
           
-          // Contenu du tab STATS
           Expanded(
             child: TabBarView(
               controller: _tabController,
