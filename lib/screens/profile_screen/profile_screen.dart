@@ -562,40 +562,40 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildIAStatItem(String level, int wins, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withOpacity(0.1),
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Center(
-            child: Text(
-              wins.toString(),
-              style: TextStyle(
-                color: color,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          level,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
+  // Widget _buildIAStatItem(String level, int wins, Color color) {
+  //   return Column(
+  //     children: [
+  //       Container(
+  //         width: 60,
+  //         height: 60,
+  //         decoration: BoxDecoration(
+  //           shape: BoxShape.circle,
+  //           color: color.withOpacity(0.1),
+  //           border: Border.all(color: color, width: 2),
+  //         ),
+  //         child: Center(
+  //           child: Text(
+  //             wins.toString(),
+  //             style: TextStyle(
+  //               color: color,
+  //               fontSize: 18,
+  //               fontWeight: FontWeight.w900,
+  //             ),
+  //           ),
+  //         ),
+  //       ),
+  //       SizedBox(height: 8),
+  //       Text(
+  //         level,
+  //         style: TextStyle(
+  //           color: Colors.white.withOpacity(0.8),
+  //           fontSize: 12,
+  //           fontWeight: FontWeight.w600,
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   // TAB HISTORIQUE DYNAMIQUE
   Widget _buildHistoryTab() {
@@ -802,62 +802,57 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               children: [
                 ...List.generate(15, (index) => _buildAnimatedParticle(index)),
                 
-                Column(
-                  children: [
-                    Row(
-                      children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
                         Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-                            ),
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFF9c27b0).withOpacity(0.5),
-                                blurRadius: 15,
-                                spreadRadius: 3,
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
                               ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              _currentPlayer!.displayAvatar,
-                              style: TextStyle(fontSize: 30),
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0xFF9c27b0).withOpacity(0.5),
+                                  blurRadius: 15,
+                                  spreadRadius: 3,
+                                ),
+                              ],
                             ),
+                            child: Center(
+                              child: Text(
+                                _currentPlayer!.displayAvatar,
+                                style: TextStyle(fontSize: 30),
+                              ),
+                            ),
+                          ),
+                        SizedBox(height: 16),
+                  
+                        Text(
+                          _currentPlayer!.username,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _currentPlayer!.username,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                '${_currentPlayer!.totalPoints} points • ${_currentPlayer!.winRate.toStringAsFixed(1)}% victoires',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
+                        SizedBox(height: 2),
+                        Text(
+                          '${_currentPlayer!.totalPoints} points • ${_currentPlayer!.winRate.toStringAsFixed(1)}% victoires',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
                           ),
                         ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-                  ],
+                              
+                    ],
+                  ),
                 ),
               ],
             ),

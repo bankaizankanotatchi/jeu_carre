@@ -7,7 +7,7 @@ class Game {
   final List<GridPoint> points;
   final List<Square> squares;
   final GameStatus status;
-    // NOUVELLES PROPRIÉTÉS POUR LE JEU EN TEMPS RÉEL
+  // NOUVELLES PROPRIÉTÉS POUR LE JEU EN TEMPS RÉEL
   final String? player1Id;      // ID du joueur 1
   final String? player2Id;      // ID du joueur 2
   final bool isAgainstAI;       // Contre l'IA
@@ -25,6 +25,7 @@ class Game {
   final List<Map<String, dynamic>> moveHistory; // Historique des coups
   final String? winnerId;       // ID du gagnant
   final GameEndReason? endReason; // Raison de fin de partie
+  final Map<String, int> consecutiveMissedTurns; // Tours manqués consécutifs
 
   Game({
     required this.id,
@@ -53,6 +54,7 @@ class Game {
     List<Map<String, dynamic>>? moveHistory,
     this.winnerId,
     this.endReason,
+    Map<String, int>? consecutiveMissedTurns, // Nouvelle propriété
   }) : spectators = spectators ?? [],
        gameSettings = gameSettings ?? {
          'allowSpectators': true,
@@ -60,7 +62,8 @@ class Game {
          'maxSpectators': 50,
        },
        reflexionTimeRemaining = reflexionTimeRemaining ?? {},
-       moveHistory = moveHistory ?? [];
+       moveHistory = moveHistory ?? [],
+       consecutiveMissedTurns = consecutiveMissedTurns ?? {}; // Initialisation
 
   Map<String, dynamic> toMap() {
     return {
@@ -72,7 +75,7 @@ class Game {
       'points': points.map((p) => p.toMap()).toList(),
       'squares': squares.map((s) => s.toMap()).toList(),
       'status': status.toString(),
-            // Nouvelles propriétés
+      // Nouvelles propriétés
       'player1Id': player1Id,
       'player2Id': player2Id,
       'isAgainstAI': isAgainstAI,
@@ -90,6 +93,7 @@ class Game {
       'moveHistory': moveHistory,
       'winnerId': winnerId,
       'endReason': endReason?.toString(),
+      'consecutiveMissedTurns': consecutiveMissedTurns, // Ajout dans toMap
     };
   }
 
@@ -103,7 +107,7 @@ class Game {
       points: List<GridPoint>.from(map['points'].map((p) => GridPoint.fromMap(p))),
       squares: List<Square>.from(map['squares'].map((s) => Square.fromMap(s))),
       status: GameStatus.values.firstWhere((e) => e.toString() == map['status']),
-            // Nouvelles propriétés
+      // Nouvelles propriétés
       player1Id: map['player1Id'],
       player2Id: map['player2Id'],
       isAgainstAI: map['isAgainstAI'] ?? false,
@@ -127,7 +131,53 @@ class Game {
       endReason: map['endReason'] != null
           ? GameEndReason.values.firstWhere((e) => e.toString() == map['endReason'])
           : null,
+      consecutiveMissedTurns: Map<String, int>.from(map['consecutiveMissedTurns'] ?? {}), // Ajout dans fromMap
     );
+  }
+
+  // Méthode utilitaire pour incrémenter les tours manqués
+  Game copyWithConsecutiveMissedTurns(String playerId, int value) {
+    final newConsecutiveMissedTurns = Map<String, int>.from(consecutiveMissedTurns);
+    newConsecutiveMissedTurns[playerId] = value;
+    
+    return Game(
+      id: id,
+      players: players,
+      currentPlayer: currentPlayer,
+      scores: scores,
+      gridSize: gridSize,
+      points: points,
+      squares: squares,
+      status: status,
+      player1Id: player1Id,
+      player2Id: player2Id,
+      isAgainstAI: isAgainstAI,
+      aiDifficulty: aiDifficulty,
+      gameDuration: gameDuration,
+      reflexionTime: reflexionTime,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      startedAt: startedAt,
+      finishedAt: finishedAt,
+      spectators: spectators,
+      gameSettings: gameSettings,
+      timeRemaining: timeRemaining,
+      reflexionTimeRemaining: reflexionTimeRemaining,
+      moveHistory: moveHistory,
+      winnerId: winnerId,
+      endReason: endReason,
+      consecutiveMissedTurns: newConsecutiveMissedTurns,
+    );
+  }
+
+  // Méthode utilitaire pour réinitialiser les tours manqués d'un joueur
+  Game copyWithResetMissedTurns(String playerId) {
+    return copyWithConsecutiveMissedTurns(playerId, 0);
+  }
+
+  // Méthode utilitaire pour vérifier si un joueur a manqué 3 tours
+  bool hasPlayerMissedThreeTurns(String playerId) {
+    return (consecutiveMissedTurns[playerId] ?? 0) >= 3;
   }
 }
 

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/game_model.dart';
-import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/services/game_service.dart';
-import 'package:jeu_carre/services/notification_service.dart';
 import 'package:jeu_carre/screens/game_screen/game_screen.dart';
 
 class MatchScreen extends StatefulWidget {
@@ -22,8 +20,8 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   // Streams pour les données en temps réel
   Stream<List<Game>>? _myActiveGamesStream;
   Stream<List<Game>>? _allActiveGamesStream;
-  Stream<List<MatchRequest>>? _receivedRequestsStream;
-  Stream<List<MatchRequest>>? _sentRequestsStream;
+  // Stream<List<MatchRequest>>? _receivedRequestsStream;
+  // Stream<List<MatchRequest>>? _sentRequestsStream;
 
   @override
   void initState() {
@@ -38,8 +36,8 @@ void _initializeStreams() {
     try {
       _myActiveGamesStream = GameService.getMyActiveGames(currentUserId);
       _allActiveGamesStream = GameService.getAllActiveGames();
-      _receivedRequestsStream = GameService.getReceivedMatchRequests(currentUserId);
-      _sentRequestsStream = GameService.getSentMatchRequests(currentUserId);
+      // _receivedRequestsStream = GameService.getReceivedMatchRequests(currentUserId);
+      // _sentRequestsStream = GameService.getSentMatchRequests(currentUserId);
     } catch (e) {
       print('Erreur initialisation streams: $e');
     }

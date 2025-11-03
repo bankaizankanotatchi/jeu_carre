@@ -513,6 +513,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                 Column(
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
                           width: 40,
@@ -529,98 +530,54 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                             onPressed: () => Navigator.pop(context),
                           ),
                         ),
-                        SizedBox(width: 12),
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-                            ),
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFF9c27b0).withOpacity(0.5),
-                                blurRadius: 15,
-                                spreadRadius: 3,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              _displayAvatar,
-                              style: TextStyle(fontSize: 30),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _displayUsername,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: _isOnline ? Colors.green : Colors.grey,
-                                    ),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    _isOnline ? 'En ligne' : 'Hors ligne',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  if (_inGame) ...[
-                                    SizedBox(width: 12),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.orange),
-                                      ),
-                                      child: Text(
-                                        'En jeu',
-                                        style: TextStyle(
-                                          color: Colors.orange,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
-                    SizedBox(height: 10),
+                    Column(
+                      children: [
+                    
+                          Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                                ),
+                                border: Border.all(color: Colors.white, width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0xFF9c27b0).withOpacity(0.5),
+                                    blurRadius: 15,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _displayAvatar,
+                                  style: TextStyle(fontSize: 30),
+                                ),
+                              ),
+                            ),
+                          SizedBox(height: 4),
+                            Text(
+                                    _displayUsername,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  SizedBox(height: 1),
+                                  Text(
+                                    '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                           ],
+                    ),
                   ],
                 ),
               ],

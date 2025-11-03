@@ -87,13 +87,9 @@ class MatchNotificationService {
       if (currentUser == null) return;
 
       // Accepter la demande via GameService
-      final game = await GameService.acceptMatchRequest(request.id, currentUser.uid);
+      await GameService.acceptMatchRequest(request.id, currentUser.uid);
       _hideNotification();
-
-      // Naviguer vers l'écran de jeu avec les paramètres de la demande
-      if (_context != null && _context!.mounted) {
-        _startGameWithRequest(request, game.id);
-      }
+      
     } catch (e) {
       print('Erreur acceptation match: $e');
       _hideNotification();
@@ -109,23 +105,6 @@ class MatchNotificationService {
     }
   }
 
-  /// Démarrer le jeu avec les paramètres de la demande
-  void _startGameWithRequest(MatchRequest request, String gameId) {
-    if (_context == null || !_context!.mounted) return;
-
-    Navigator.pushReplacement(
-      _context!,
-      MaterialPageRoute(
-        builder: (context) => GameScreen(
-          gridSize: request.gridSize,
-          isAgainstAI: false, // C'est un match en ligne
-          gameDuration: request.gameDuration,
-          reflexionTime: request.reflexionTime,
-          opponentId: request.fromUserId, // L'adversaire est celui qui a envoyé le défi
-        ),
-      ),
-    );
-  }
   /// Refuser le match
   Future<void> _declineMatch(MatchRequest request) async {
     try {

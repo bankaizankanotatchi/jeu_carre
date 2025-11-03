@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/screens/navigation_screen.dart';
 
 class GameRulesScreen extends StatefulWidget {
   const GameRulesScreen({super.key});
@@ -568,7 +569,13 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                           duration: Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
                         );
-                      } : null,
+                      } : () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => NavigationScreen()),
+                            );
+                        Navigator.pop(context);
+                      },
                       child: Center(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,

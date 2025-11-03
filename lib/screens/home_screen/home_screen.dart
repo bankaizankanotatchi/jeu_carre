@@ -197,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-            padding: EdgeInsets.all(24),
+            padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -238,8 +238,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   'Shikaku Édition Ultime',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 SizedBox(height: 10),
@@ -249,30 +249,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     color: Colors.white70,
                     fontSize: 14,
                   ),
-                ),
-                SizedBox(height: 20),
-                FutureBuilder<Map<String, dynamic>>(
-                  future: RankingService.getPlatformStats(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildLoadingStats();
-                    }
-                    
-                    if (snapshot.hasError) {
-                      return _buildStatsError();
-                    }
-                    
-                    final stats = snapshot.data ?? {};
-                    
-                    return Column(
-                      children: [
-                        _buildStatItem('Joueurs inscrits', '${stats['totalPlayers'] ?? 0}'),
-                        _buildStatItem('Parties jouées', '${stats['totalGames'] ?? 0}'),
-                        _buildStatItem('Actifs aujourd\'hui', '${stats['activeToday'] ?? 0}'),
-                        _buildStatItem('Points totaux', '${stats['totalPoints'] ?? 0}'),
-                      ],
-                    );
-                  },
                 ),
                 SizedBox(height: 20),
                 Text(

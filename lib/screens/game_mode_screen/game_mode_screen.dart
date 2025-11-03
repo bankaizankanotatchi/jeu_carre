@@ -36,7 +36,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
 
   // Options disponibles
   final List<int> _gridSizeOptions = [15, 20, 25, 30];
-  final List<int> _gameDurationOptions = [180, 300, 600, 900]; // 1, 2, 3, 5 minutes
+  final List<int> _gameDurationOptions = [180, 300, 600, 900]; // 3, 5, 10, 15 minutes
   final List<int> _reflexionTimeOptions = [5, 10, 15, 20]; // secondes
 
   @override
@@ -437,7 +437,7 @@ Widget _buildChallengeParam(String title, String value) {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

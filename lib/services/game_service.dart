@@ -47,6 +47,7 @@ class GameService {
       throw Exception('Erreur création partie: $e');
     }
   }
+
   /// Créer une partie contre l'IA
   static Future<Game> createAIGame({
     required int gridSize,
@@ -79,6 +80,10 @@ class GameService {
       reflexionTimeRemaining: {
         currentUser.uid: reflexionTime,
         'ai_${difficulty.toString()}': reflexionTime,
+      },
+      consecutiveMissedTurns: {
+        currentUser.uid: 0,
+        'ai_${difficulty.toString()}': 0,
       },
       gameSettings: {
         'allowSpectators': false,
@@ -116,6 +121,8 @@ class GameService {
         'status': GameStatus.playing.toString(),
         'startedAt': DateTime.now().millisecondsSinceEpoch,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'reflexionTimeRemaining.$playerId': game.reflexionTime,
+        'consecutiveMissedTurns.$playerId': 0,
       });
 
       await _updatePlayerGameStatus(playerId, true, gameId);
@@ -124,35 +131,57 @@ class GameService {
     }
   }
 
-    // NOUVEAU: Mettre à jour le temps de réflexion en temps réel
-  static Future<void> updateReflexionTime(String gameId, String playerId, int timeRemaining) async {
+  // ============================================================
+  // MÉTHODES ATOMIQUES POUR MISE À JOUR TEMPS RÉEL
+  // ============================================================
+
+  /// Mettre à jour le temps de réflexion de manière atomique
+  static Future<void> updateReflexionTimeAtomic(String gameId, String playerId, int newTime) async {
     try {
       await gamesCollection.doc(gameId).update({
-        'reflexionTimeRemaining.$playerId': timeRemaining,
+        'reflexionTimeRemaining.$playerId': newTime,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
     } catch (e) {
-      print('Erreur mise à jour temps réflexion: $e');
+      print('Erreur mise à jour temps réflexion atomique: $e');
     }
   }
 
-  // NOUVEAU: Mettre à jour le temps global de la partie
+  /// Mettre à jour le temps global de la partie
   static Future<void> updateGameTime(String gameId, int timeRemaining) async {
     try {
       await gamesCollection.doc(gameId).update({
         'timeRemaining': timeRemaining,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
+      
+      // Vérifier si le temps est écoulé
+      if (timeRemaining <= 0) {
+        await _checkAndFinishGame(gameId);
+      }
     } catch (e) {
       print('Erreur mise à jour temps jeu: $e');
     }
   }
 
-  // NOUVEAU: Changer de joueur
-  static Future<void> switchPlayer(String gameId, String nextPlayerId) async {
+  /// Mettre à jour le joueur actif
+  static Future<void> updateCurrentPlayer(String gameId, String currentPlayerId) async {
+    try {
+      await gamesCollection.doc(gameId).update({
+        'currentPlayer': currentPlayerId,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      print('Erreur mise à jour joueur actif: $e');
+    }
+  }
+
+  /// Changer de joueur avec réinitialisation du temps
+  static Future<void> switchPlayer(String gameId, String nextPlayerId, int reflexionTime) async {
     try {
       await gamesCollection.doc(gameId).update({
         'currentPlayer': nextPlayerId,
+        'reflexionTimeRemaining.$nextPlayerId': reflexionTime,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
     } catch (e) {
@@ -160,27 +189,53 @@ class GameService {
     }
   }
 
-
-  /// Mettre à jour l'état d'une partie de manière optimisée
-  static Future<void> updateGameState(String gameId, Game game) async {
+  /// Mettre à jour les tours manqués consécutifs
+  static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int> consecutiveMissedTurns) async {
     try {
-      final updates = game.toMap();
-      updates['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+      await gamesCollection.doc(gameId).update({
+        'consecutiveMissedTurns': consecutiveMissedTurns,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      });
       
-      await gamesCollection.doc(gameId).update(updates);
+      // Vérifier si un joueur a manqué 3 tours
+      for (final entry in consecutiveMissedTurns.entries) {
+        if (entry.value >= 3) {
+          await _finishGameByMissedTurns(gameId, entry.key);
+          break;
+        }
+      }
     } catch (e) {
-      throw Exception('Erreur mise à jour partie: $e');
+      print('Erreur mise à jour tours manqués: $e');
     }
   }
 
-  /// Ajouter un point à la partie
+  // ============================================================
+  // GESTION DES POINTS ET CARRÉS
+  // ============================================================
+
+  /// Ajouter un point à la partie avec gestion du prochain joueur
   static Future<void> addPointToGame(String gameId, GridPoint point) async {
     try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) throw Exception('Partie non trouvée');
+      
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      final nextPlayerId = _getNextPlayerId(game, point.playerId!);
+
       await gamesCollection.doc(gameId).update({
         'points': FieldValue.arrayUnion([point.toMap()]),
+        'currentPlayer': nextPlayerId,
+        'consecutiveMissedTurns.${point.playerId}': 0, // Réinitialiser les tours manqués
+        'reflexionTimeRemaining.$nextPlayerId': game.reflexionTime,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        'currentPlayer': _getNextPlayer(gameId, point.playerId!),
       });
+
+      // Vérifier si la grille est pleine
+      final updatedGameDoc = await gamesCollection.doc(gameId).get();
+      final updatedGame = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
+      if (updatedGame.points.length >= updatedGame.gridSize * updatedGame.gridSize) {
+        await _finishGameByGridFull(gameId);
+      }
     } catch (e) {
       throw Exception('Erreur ajout point: $e');
     }
@@ -199,42 +254,138 @@ class GameService {
     }
   }
 
-  /// Terminer une partie
-  static Future<void> finishGame(String gameId, {String? winnerId, GameEndReason? endReason}) async {
+  // ============================================================
+  // GESTION DE LA FIN DE PARTIE
+  // ============================================================
+
+  /// Marquer la partie comme terminée avec raison
+  static Future<void> finishGameWithReason(String gameId, {String? winnerId, required String endReason}) async {
     try {
       final updates = {
         'status': GameStatus.finished.toString(),
         'finishedAt': DateTime.now().millisecondsSinceEpoch,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'endReason': endReason,
       };
 
       if (winnerId != null) {
         updates['winnerId'] = winnerId;
       }
 
-      if (endReason != null) {
-        updates['endReason'] = endReason.toString();
-      }
-
       await gamesCollection.doc(gameId).update(updates);
 
       // Mettre à jour le statut des joueurs
       final gameDoc = await gamesCollection.doc(gameId).get();
-      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-      
-      for (final playerId in game.players) {
-        await _updatePlayerGameStatus(playerId, false, null);
+      if (gameDoc.exists) {
+        final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+        for (final playerId in game.players) {
+          if (!playerId.startsWith('ai_')) {
+            await _updatePlayerGameStatus(playerId, false, null);
+          }
+        }
+        await _saveGameResults(game);
       }
-
-      // Sauvegarder les résultats
-      await _saveGameResults(game);
     } catch (e) {
       throw Exception('Erreur fin de partie: $e');
     }
   }
 
+  /// Vérifier et terminer une partie si nécessaire
+  static Future<void> _checkAndFinishGame(String gameId) async {
+    try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) return;
+
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      if (game.status == GameStatus.finished) return;
+
+      await _finishGameByTime(gameId);
+    } catch (e) {
+      print('Erreur vérification fin de partie: $e');
+    }
+  }
+
+  /// Fin de partie par temps écoulé
+  static Future<void> _finishGameByTime(String gameId) async {
+    try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) return;
+
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      final blueScore = game.scores[game.player1Id] ?? 0;
+      final redScore = game.scores[game.player2Id] ?? 0;
+      
+      String? winnerId;
+      String endReason;
+
+      if (blueScore > redScore) {
+        winnerId = game.player1Id;
+        endReason = 'time_up_win_blue';
+      } else if (redScore > blueScore) {
+        winnerId = game.player2Id;
+        endReason = 'time_up_win_red';
+      } else {
+        winnerId = null;
+        endReason = 'time_up_draw';
+      }
+
+      await finishGameWithReason(gameId, winnerId: winnerId, endReason: endReason);
+    } catch (e) {
+      print('Erreur fin de partie par temps: $e');
+    }
+  }
+
+  /// Fin de partie par grille pleine
+  static Future<void> _finishGameByGridFull(String gameId) async {
+    try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) return;
+
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      final blueScore = game.scores[game.player1Id] ?? 0;
+      final redScore = game.scores[game.player2Id] ?? 0;
+      
+      String? winnerId;
+      String endReason;
+
+      if (blueScore > redScore) {
+        winnerId = game.player1Id;
+        endReason = 'grid_full_win_blue';
+      } else if (redScore > blueScore) {
+        winnerId = game.player2Id;
+        endReason = 'grid_full_win_red';
+      } else {
+        winnerId = null;
+        endReason = 'grid_full_draw';
+      }
+
+      await finishGameWithReason(gameId, winnerId: winnerId, endReason: endReason);
+    } catch (e) {
+      print('Erreur fin de partie par grille pleine: $e');
+    }
+  }
+
+  /// Fin de partie par tours manqués
+  static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMissed) async {
+    try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) return;
+
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      final winnerId = playerWhoMissed == game.player1Id ? game.player2Id : game.player1Id;
+
+      await finishGameWithReason(
+        gameId, 
+        winnerId: winnerId, 
+        endReason: 'consecutive_missed_turns'
+      );
+    } catch (e) {
+      print('Erreur fin de partie par tours manqués: $e');
+    }
+  }
+
   // ============================================================
-  // GESTION DES SPECTATEURS - NOUVELLES MÉTHODES
+  // GESTION DES SPECTATEURS
   // ============================================================
 
   /// Récupérer les spectateurs d'une partie en temps réel
@@ -262,6 +413,45 @@ class GameService {
     });
   }
 
+  /// Rejoindre une partie en tant que spectateur
+  static Future<void> joinAsSpectator(String gameId, String userId) async {
+    try {
+      final gameDoc = await gamesCollection.doc(gameId).get();
+      if (!gameDoc.exists) throw Exception('Partie non trouvée');
+
+      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      
+      if (!(game.gameSettings['allowSpectators'] ?? false)) {
+        throw Exception('Les spectateurs ne sont pas autorisés pour cette partie');
+      }
+
+      final maxSpectators = game.gameSettings['maxSpectators'] ?? 50;
+      if (game.spectators.length >= maxSpectators) {
+        throw Exception('Limite de spectateurs atteinte');
+      }
+
+      if (game.players.contains(userId)) {
+        throw Exception('Vous êtes déjà dans cette partie');
+      }
+
+      if (game.spectators.contains(userId)) {
+        throw Exception('Vous observez déjà cette partie');
+      }
+
+      await gamesCollection.doc(gameId).update({
+        'spectators': FieldValue.arrayUnion([userId]),
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      await spectatorsCollection.doc(gameId).set({
+        'gameId': gameId,
+        'spectators': FieldValue.arrayUnion([userId]),
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception('Erreur rejoindre spectateur: $e');
+    }
+  }
 
   /// Quitter une partie en tant que spectateur
   static Future<void> leaveAsSpectator(String gameId, String userId) async {
@@ -271,7 +461,6 @@ class GameService {
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
 
-      // Retirer des spectateurs globaux
       await spectatorsCollection.doc(gameId).update({
         'spectators': FieldValue.arrayRemove([userId]),
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
@@ -304,254 +493,30 @@ class GameService {
         });
   }
 
-  // ============================================================
-// MÉTHODES SPÉCIFIQUES POUR MATCHSCREEN - À AJOUTER
-// ============================================================
-
-/// Récupérer les parties actives de l'utilisateur avec userId explicite
-static Stream<List<Game>> getMyActiveGames(String userId) {
-  return gamesCollection
-      .where('players', arrayContains: userId)
-      .where('status', whereIn: [
-        GameStatus.playing.toString(),
-        GameStatus.waiting.toString(),
-      ])
-      .orderBy('updatedAt', descending: true)
-      .snapshots()
-      .handleError((error) => print('Erreur stream mes parties: $error'))
-      .map((snapshot) => snapshot.docs
-          .map((doc) {
-            try {
-              return Game.fromMap(doc.data() as Map<String, dynamic>);
-            } catch (e) {
-              print('Erreur parsing partie: $e');
-              return null;
-            }
-          })
-          .where((game) => game != null)
-          .cast<Game>()
-          .toList());
-}
-
-/// Récupérer les demandes de match reçues
-static Stream<List<MatchRequest>> getReceivedMatchRequests(String userId) {
-  return matchRequestsCollection
-      .where('toUserId', isEqualTo: userId)
-      .where('status', whereIn: [
-        MatchRequestStatus.pending.toString(),
-        MatchRequestStatus.accepted.toString(),
-      ])
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs
-          .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
-          .toList());
-}
-
-/// Récupérer les demandes de match envoyées
-static Stream<List<MatchRequest>> getSentMatchRequests(String userId) {
-  return matchRequestsCollection
-      .where('fromUserId', isEqualTo: userId)
-      .where('status', whereIn: [
-        MatchRequestStatus.pending.toString(),
-        MatchRequestStatus.accepted.toString(),
-      ])
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs
-          .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
-          .toList());
-}
-
-/// Accepter une demande de match avec userId
-static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
-  try {
-    final requestDoc = await matchRequestsCollection.doc(requestId).get();
-    if (!requestDoc.exists) throw Exception('Demande non trouvée');
-
-    final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
-    
-    // Vérifications existantes...
-    if (request.toUserId != currentUserId) {
-      throw Exception('Vous ne pouvez pas accepter cette demande');
-    }
-    
-    if (GameService.isMatchRequestExpired(request)) {
-      throw Exception('Cette demande de match a expiré');
-    }
-
-    // Mettre à jour la demande
-    await matchRequestsCollection.doc(requestId).update({
-      'status': MatchRequestStatus.accepted.toString(),
-      'respondedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    // Créer la partie
-    final gameId = generateId();
-    final game = Game(
-      id: gameId,
-      players: [request.fromUserId, request.toUserId],
-      currentPlayer: request.fromUserId, // Celui qui a envoyé le défi commence
-      scores: {request.fromUserId: 0, request.toUserId: 0},
-      gridSize: request.gridSize,
-      points: [],
-      squares: [],
-      status: GameStatus.playing,
-      player1Id: request.fromUserId,
-      player2Id: request.toUserId,
-      isAgainstAI: false,
-      gameDuration: request.gameDuration,
-      reflexionTime: request.reflexionTime,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      startedAt: DateTime.now(),
-      timeRemaining: request.gameDuration,
-      reflexionTimeRemaining: {
-        request.fromUserId: request.reflexionTime,
-        request.toUserId: request.reflexionTime,
-      },
-      gameSettings: {
-        'allowSpectators': true,
-        'isRanked': true,
-        'maxSpectators': 50,
-      },
-    );
-
-    await createGame(game);
-
-    // 🔥 ENVOYER LES DEUX NOTIFICATIONS
-    await _sendMatchAcceptedNotification(request, gameId); // Pour l'accepteur
-    await _sendGameStartedNotification(request, gameId);   // 🔥 POUR LE DEMANDEUR
-
-    return game;
-  } catch (e) {
-    throw Exception('Erreur acceptation demande: $e');
+  /// Récupérer les parties actives de l'utilisateur avec userId explicite
+  static Stream<List<Game>> getMyActiveGames(String userId) {
+    return gamesCollection
+        .where('players', arrayContains: userId)
+        .where('status', whereIn: [
+          GameStatus.playing.toString(),
+          GameStatus.waiting.toString(),
+        ])
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .handleError((error) => print('Erreur stream mes parties: $error'))
+        .map((snapshot) => snapshot.docs
+            .map((doc) {
+              try {
+                return Game.fromMap(doc.data() as Map<String, dynamic>);
+              } catch (e) {
+                print('Erreur parsing partie: $e');
+                return null;
+              }
+            })
+            .where((game) => game != null)
+            .cast<Game>()
+            .toList());
   }
-}
-
-/// Dans GameService - AJOUTER cette méthode
-static Future<void> _sendGameStartedNotification(MatchRequest request, String gameId) async {
-  try {
-    final toUser = await getPlayer(request.toUserId);
-    if (toUser == null) return;
-
-    await notificationsCollection.add({
-      'userId': request.fromUserId, // 🔥 Le demandeur reçoit la notification
-      'title': 'Défi accepté ! 🎮',
-      'message': '${toUser.username} a accepté votre défi - La partie commence !',
-      'type': 'game_started',
-      'data': {
-        'gameId': gameId,
-        'opponentId': request.toUserId,
-        'opponentUsername': toUser.username,
-        'gridSize': request.gridSize,
-        'gameDuration': request.gameDuration,
-        'reflexionTime': request.reflexionTime,
-      },
-      'isRead': false,
-      'createdAt': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    print('🔔 Notification de début de jeu envoyée à ${request.fromUserId}');
-  } catch (e) {
-    print('Erreur notification début jeu: $e');
-  }
-}
-
-
-/// Refuser une demande de match avec userId
-static Future<void> rejectMatchRequest(String requestId, String currentUserId, {String reason = 'Refusé par le joueur'}) async {
-  try {
-    final requestDoc = await matchRequestsCollection.doc(requestId).get();
-    if (!requestDoc.exists) throw Exception('Demande non trouvée');
-
-    final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
-    
-    // Vérifier que l'utilisateur peut refuser cette demande
-    if (request.toUserId != currentUserId) {
-      throw Exception('Vous ne pouvez pas refuser cette demande');
-    }
-
-    await matchRequestsCollection.doc(requestId).update({
-      'status': MatchRequestStatus.declined.toString(),
-      'declinedReason': reason,
-      'respondedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    // Envoyer une notification de refus
-    await _sendMatchRejectedNotification(request, reason);
-  } catch (e) {
-    throw Exception('Erreur refus demande: $e');
-  }
-}
-
-/// Annuler une demande de match avec userId
-static Future<void> cancelMatchRequest(String requestId, String currentUserId) async {
-  try {
-    final requestDoc = await matchRequestsCollection.doc(requestId).get();
-    if (!requestDoc.exists) throw Exception('Demande non trouvée');
-
-    final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
-    
-    // Vérifier que l'utilisateur peut annuler cette demande
-    if (request.fromUserId != currentUserId) {
-      throw Exception('Vous ne pouvez pas annuler cette demande');
-    }
-
-    await matchRequestsCollection.doc(requestId).update({
-      'status': MatchRequestStatus.cancelled.toString(),
-      'respondedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-  } catch (e) {
-    throw Exception('Erreur annulation demande: $e');
-  }
-}
-
-/// Rejoindre une partie en tant que spectateur
-static Future<void> joinAsSpectator(String gameId, String userId) async {
-  try {
-    // Vérifier que la partie existe
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) throw Exception('Partie non trouvée');
-
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    
-    // Vérifier que les spectateurs sont autorisés
-    if (!(game.gameSettings['allowSpectators'] ?? false)) {
-      throw Exception('Les spectateurs ne sont pas autorisés pour cette partie');
-    }
-
-    // Vérifier la limite de spectateurs
-    final maxSpectators = game.gameSettings['maxSpectators'] ?? 50;
-    if (game.spectators.length >= maxSpectators) {
-      throw Exception('Limite de spectateurs atteinte');
-    }
-
-    // Vérifier que l'utilisateur n'est pas déjà dans la partie
-    if (game.players.contains(userId)) {
-      throw Exception('Vous êtes déjà dans cette partie');
-    }
-
-    if (game.spectators.contains(userId)) {
-      throw Exception('Vous observez déjà cette partie');
-    }
-
-    await gamesCollection.doc(gameId).update({
-      'spectators': FieldValue.arrayUnion([userId]),
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    // Ajouter aux spectateurs globaux
-    await spectatorsCollection.doc(gameId).set({
-      'gameId': gameId,
-      'spectators': FieldValue.arrayUnion([userId]),
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    }, SetOptions(merge: true));
-  } catch (e) {
-    throw Exception('Erreur rejoindre spectateur: $e');
-  }
-}
-
 
   /// Récupérer toutes les parties publiques actives
   static Stream<List<Game>> getAllActiveGames() {
@@ -559,7 +524,7 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
         .where('status', isEqualTo: GameStatus.playing.toString())
         .where('gameSettings.allowSpectators', isEqualTo: true)
         .orderBy('updatedAt', descending: true)
-        .limit(50) // Limite pour performance
+        .limit(50)
         .snapshots()
         .handleError((error) => print('Erreur stream parties publiques: $error'))
         .map((snapshot) => snapshot.docs
@@ -593,13 +558,42 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
   }
 
   // ============================================================
-  // GESTION DES DEMANDES DE MATCH - COMPLÈTE
+  // GESTION DES DEMANDES DE MATCH
   // ============================================================
+
+  /// Récupérer les demandes de match reçues
+  static Stream<List<MatchRequest>> getReceivedMatchRequests(String userId) {
+    return matchRequestsCollection
+        .where('toUserId', isEqualTo: userId)
+        .where('status', whereIn: [
+          MatchRequestStatus.pending.toString(),
+          MatchRequestStatus.accepted.toString(),
+        ])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
+            .toList());
+  }
+
+  /// Récupérer les demandes de match envoyées
+  static Stream<List<MatchRequest>> getSentMatchRequests(String userId) {
+    return matchRequestsCollection
+        .where('fromUserId', isEqualTo: userId)
+        .where('status', whereIn: [
+          MatchRequestStatus.pending.toString(),
+          MatchRequestStatus.accepted.toString(),
+        ])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
+            .toList());
+  }
 
   /// Envoyer une demande de match avec notification
   static Future<void> sendMatchRequest(MatchRequest request) async {
     try {
-      // Vérifier si une demande similaire existe déjà
       final existingRequest = await matchRequestsCollection
           .where('fromUserId', isEqualTo: request.fromUserId)
           .where('toUserId', isEqualTo: request.toUserId)
@@ -612,37 +606,124 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
       }
 
       await matchRequestsCollection.doc(request.id).set(request.toMap());
-
-      // Envoyer une notification
       await _sendMatchRequestNotification(request);
     } catch (e) {
       throw Exception('Erreur envoi demande: $e');
     }
   }
 
+  /// Accepter une demande de match avec userId
+  static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
+    try {
+      final requestDoc = await matchRequestsCollection.doc(requestId).get();
+      if (!requestDoc.exists) throw Exception('Demande non trouvée');
 
-  /// Récupérer toutes les demandes de match (reçues + envoyées)
-  static Stream<List<MatchRequest>> getAllMatchRequests() {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return Stream.value([]);
+      final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
+      
+      if (request.toUserId != currentUserId) {
+        throw Exception('Vous ne pouvez pas accepter cette demande');
+      }
+      
+      if (GameService.isMatchRequestExpired(request)) {
+        throw Exception('Cette demande de match a expiré');
+      }
 
-    return matchRequestsCollection
-        .where('status', whereIn: [
-          MatchRequestStatus.pending.toString(),
-          MatchRequestStatus.accepted.toString(),
-        ])
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
-            .where((request) => 
-                request.fromUserId == currentUserId || 
-                request.toUserId == currentUserId)
-            .toList());
+      await matchRequestsCollection.doc(requestId).update({
+        'status': MatchRequestStatus.accepted.toString(),
+        'respondedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      final gameId = generateId();
+      final game = Game(
+        id: gameId,
+        players: [request.fromUserId, request.toUserId],
+        currentPlayer: request.fromUserId,
+        scores: {request.fromUserId: 0, request.toUserId: 0},
+        gridSize: request.gridSize,
+        points: [],
+        squares: [],
+        status: GameStatus.playing,
+        player1Id: request.fromUserId,
+        player2Id: request.toUserId,
+        isAgainstAI: false,
+        gameDuration: request.gameDuration,
+        reflexionTime: request.reflexionTime,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        startedAt: DateTime.now(),
+        timeRemaining: request.gameDuration,
+        reflexionTimeRemaining: {
+          request.fromUserId: request.reflexionTime,
+          request.toUserId: request.reflexionTime,
+        },
+        consecutiveMissedTurns: {
+          request.fromUserId: 0,
+          request.toUserId: 0,
+        },
+        gameSettings: {
+          'allowSpectators': true,
+          'isRanked': true,
+          'maxSpectators': 50,
+        },
+      );
+
+      await createGame(game);
+      await _sendMatchAcceptedNotification(request, gameId);
+      await _sendGameStartedNotification(request, gameId);
+
+      return game;
+    } catch (e) {
+      throw Exception('Erreur acceptation demande: $e');
+    }
+  }
+
+  /// Refuser une demande de match avec userId
+  static Future<void> rejectMatchRequest(String requestId, String currentUserId, {String reason = 'Refusé par le joueur'}) async {
+    try {
+      final requestDoc = await matchRequestsCollection.doc(requestId).get();
+      if (!requestDoc.exists) throw Exception('Demande non trouvée');
+
+      final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
+      
+      if (request.toUserId != currentUserId) {
+        throw Exception('Vous ne pouvez pas refuser cette demande');
+      }
+
+      await matchRequestsCollection.doc(requestId).update({
+        'status': MatchRequestStatus.declined.toString(),
+        'declinedReason': reason,
+        'respondedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      await _sendMatchRejectedNotification(request, reason);
+    } catch (e) {
+      throw Exception('Erreur refus demande: $e');
+    }
+  }
+
+  /// Annuler une demande de match avec userId
+  static Future<void> cancelMatchRequest(String requestId, String currentUserId) async {
+    try {
+      final requestDoc = await matchRequestsCollection.doc(requestId).get();
+      if (!requestDoc.exists) throw Exception('Demande non trouvée');
+
+      final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
+      
+      if (request.fromUserId != currentUserId) {
+        throw Exception('Vous ne pouvez pas annuler cette demande');
+      }
+
+      await matchRequestsCollection.doc(requestId).update({
+        'status': MatchRequestStatus.cancelled.toString(),
+        'respondedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      throw Exception('Erreur annulation demande: $e');
+    }
   }
 
   // ============================================================
-  // GESTION DES RÉSULTATS ET STATISTIQUES - AMÉLIORÉE
+  // GESTION DES RÉSULTATS ET STATISTIQUES
   // ============================================================
 
   /// Sauvegarder le résultat d'une partie
@@ -655,7 +736,7 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
     }
   }
 
-  /// Mettre à jour les statistiques du joueur de manière complète
+  /// Mettre à jour les statistiques du joueur
   static Future<void> _updatePlayerStats(GameResult result) async {
     try {
       final userDoc = await usersCollection.doc(result.userId).get();
@@ -674,9 +755,8 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
         'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
       };
 
-      // Mettre à jour les séries
       if (isWin) {
-        final newWinStreak = (player.stats.winStreak ) + 1;
+        final newWinStreak = (player.stats.winStreak) + 1;
         updates['stats.winStreak'] = newWinStreak;
         if (newWinStreak > player.stats.bestWinStreak) {
           updates['stats.bestWinStreak'] = newWinStreak;
@@ -685,12 +765,10 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
         updates['stats.winStreak'] = 0;
       }
 
-      // Mettre à jour le meilleur score
       if (result.pointsScored > player.stats.bestGamePoints) {
         updates['stats.bestGamePoints'] = result.pointsScored;
       }
 
-      // Mettre à jour les points mensuels/hebdomadaires/quotidiens
       final now = DateTime.now();
       updates['stats.dailyPoints'] = player.stats.dailyPoints + result.pointsScored;
       updates['stats.weeklyPoints'] = player.stats.weeklyPoints + result.pointsScored;
@@ -706,7 +784,7 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
   static Future<void> _saveGameResults(Game game) async {
     try {
       for (final playerId in game.players) {
-        if (playerId.startsWith('ai_')) continue; // Ignorer l'IA
+        if (playerId.startsWith('ai_')) continue;
 
         final playerScore = game.scores[playerId] ?? 0;
         final isWinner = game.winnerId == playerId;
@@ -733,7 +811,7 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
   }
 
   // ============================================================
-  // FONCTIONS UTILITAIRES - COMPLÈTES
+  // FONCTIONS UTILITAIRES
   // ============================================================
 
   /// Vérifier si une demande de match est expirée
@@ -747,7 +825,7 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
     return _firestore.collection('temp').doc().id;
   }
 
-  /// Récupérer les informations d'un joueur avec cache
+  /// Récupérer les informations d'un joueur
   static Future<Player?> getPlayer(String userId) async {
     try {
       final doc = await usersCollection.doc(userId).get();
@@ -764,6 +842,15 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
   // ============================================================
   // FONCTIONS PRIVÉES
   // ============================================================
+
+  /// Obtenir le prochain joueur (CORRIGÉ)
+  static String _getNextPlayerId(Game game, String currentPlayerId) {
+    if (game.player1Id == currentPlayerId) {
+      return game.player2Id!;
+    } else {
+      return game.player1Id!;
+    }
+  }
 
   /// Mettre à jour le statut de jeu d'un joueur
   static Future<void> _updatePlayerGameStatus(String playerId, bool inGame, String? gameId) async {
@@ -782,13 +869,6 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
     } catch (e) {
       print('Erreur mise à jour statut jeu: $e');
     }
-  }
-
-  /// Obtenir le prochain joueur
-  static String _getNextPlayer(String gameId, String currentPlayerId) {
-    // Implémentation simplifiée - à adapter selon ta logique de jeu
-    final currentUser = _auth.currentUser;
-    return currentUser?.uid == currentPlayerId ? 'opponent' : currentUser?.uid ?? '';
   }
 
   /// Envoyer une notification de demande de match
@@ -838,6 +918,33 @@ static Future<void> joinAsSpectator(String gameId, String userId) async {
       });
     } catch (e) {
       print('Erreur notification acceptation: $e');
+    }
+  }
+
+  /// Envoyer une notification de début de jeu
+  static Future<void> _sendGameStartedNotification(MatchRequest request, String gameId) async {
+    try {
+      final toUser = await getPlayer(request.toUserId);
+      if (toUser == null) return;
+
+      await notificationsCollection.add({
+        'userId': request.fromUserId,
+        'title': 'Défi accepté ! 🎮',
+        'message': '${toUser.username} a accepté votre défi - La partie commence !',
+        'type': 'game_started',
+        'data': {
+          'gameId': gameId,
+          'opponentId': request.toUserId,
+          'opponentUsername': toUser.username,
+          'gridSize': request.gridSize,
+          'gameDuration': request.gameDuration,
+          'reflexionTime': request.reflexionTime,
+        },
+        'isRead': false,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      print('Erreur notification début jeu: $e');
     }
   }
 
