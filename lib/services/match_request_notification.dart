@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/game_request.dart';
-import 'package:jeu_carre/screens/game_screen/game_screen.dart';
 import 'package:jeu_carre/services/game_service.dart';
 import 'package:jeu_carre/widgets/match_request_notification.dart';
 

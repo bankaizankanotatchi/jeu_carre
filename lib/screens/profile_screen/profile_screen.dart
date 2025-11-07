@@ -832,7 +832,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                               ),
                             ),
                           ),
-                        SizedBox(height: 16),
+                        SizedBox(height: 8),
                   
                         Text(
                           _currentPlayer!.username,
