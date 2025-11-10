@@ -377,13 +377,7 @@ class RankingService {
       final player = entry.value;
       
       // Déterminer l'emoji en fonction du rang
-      String avatarEmoji;
-      switch (index) {
-        case 0: avatarEmoji = '🥇'; break;
-        case 1: avatarEmoji = '🥈'; break;
-        case 2: avatarEmoji = '🥉'; break;
-        default: avatarEmoji = '👑';
-      }
+    String avatarEmoji = player.displayAvatar; // ← Ça utilise avatarUrl OU defaultEmoji
 
       // Déterminer la tendance (simulée pour l'exemple)
       final trend = ['up', 'down', 'stable'][index % 3];

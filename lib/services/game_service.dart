@@ -134,6 +134,7 @@ class GameService {
   // ============================================================
   // MÉTHODES ATOMIQUES POUR MISE À JOUR TEMPS RÉEL
   // ============================================================
+  
 
   /// Mettre à jour le temps de réflexion de manière atomique
   static Future<void> updateReflexionTimeAtomic(String gameId, String playerId, int newTime) async {
@@ -255,132 +256,207 @@ class GameService {
   }
 
   // ============================================================
-  // GESTION DE LA FIN DE PARTIE
+  // GESTION DE LA FIN DE PARTIE - CORRECTIONS APPLIQUÉES
   // ============================================================
 
-  /// Marquer la partie comme terminée avec raison
-  static Future<void> finishGameWithReason(String gameId, {String? winnerId, required String endReason}) async {
-    try {
-      final updates = {
-        'status': GameStatus.finished.toString(),
-        'finishedAt': DateTime.now().millisecondsSinceEpoch,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        'endReason': endReason,
-      };
+/// Marquer la partie comme terminée avec raison
+static Future<void> finishGameWithReason(String gameId, {String? winnerId, required GameEndReason endReason}) async {
+  try {
+    print('🎯 Début finishGameWithReason: $gameId, winner: $winnerId, raison: $endReason');
+    
+    // 🎯 CORRECTION: TOUT FAIRE EN UNE SEULE OPÉRATION ATOMIQUE
+    final updates = {
+      'status': GameStatus.finished.toString(),
+      'finishedAt': DateTime.now().millisecondsSinceEpoch,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      'endReason': endReason.toString(),
+      'winnerId': winnerId, // 🎯 TOUJOURS définir winnerId (même si null)
+    };
 
-      if (winnerId != null) {
-        updates['winnerId'] = winnerId;
-      }
+    print('📝 Mise à jour Firestore: $updates');
+    
+    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
+    await gamesCollection.doc(gameId).update(updates);
+    print('✅ Partie terminée dans Firestore avec winnerId: $winnerId');
 
-      await gamesCollection.doc(gameId).update(updates);
-
-      // Mettre à jour le statut des joueurs
-      final gameDoc = await gamesCollection.doc(gameId).get();
-      if (gameDoc.exists) {
-        final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-        for (final playerId in game.players) {
-          if (!playerId.startsWith('ai_')) {
-            await _updatePlayerGameStatus(playerId, false, null);
-          }
-        }
-        await _saveGameResults(game);
-      }
-    } catch (e) {
-      throw Exception('Erreur fin de partie: $e');
+    // 🎯 ATTENDRE QUE FIRESTORE SYNCHRONISE
+    await Future.delayed(Duration(milliseconds: 1000));
+    
+    // 🎯 MAINTENANT RÉCUPÉRER LA PARTIE MISE À JOUR
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) {
+      print('❌ Partie non trouvée après mise à jour: $gameId');
+      return;
     }
-  }
 
+    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    
+    // 🎯 VÉRIFICATION DES DONNÉES MISE À JOUR
+    print('🔍 Vérification après mise à jour:');
+    print('  - status: ${game.status}');
+    print('  - winnerId: ${game.winnerId}');
+    print('  - endReason: ${game.endReason}');
+    
+    if (game.status != GameStatus.finished) {
+      print('❌ ERREUR: Partie pas encore terminée après update!');
+      return;
+    }
+
+    // SAUVEGARDER LES RÉSULTATS
+    print('💾 Sauvegarde résultats pour ${game.players.length} joueurs');
+    
+    for (final playerId in game.players) {
+      if (!playerId.startsWith('ai_')) {
+        await _updatePlayerGameStatus(playerId, false, null);
+      }
+    }
+    
+    await _saveGameResults(game);
+    print('✅ Tous les résultats sauvegardés pour partie $gameId');
+    
+  } catch (e) {
+    print('❌ Erreur fin de partie: $e');
+  }
+}
   /// Vérifier et terminer une partie si nécessaire
   static Future<void> _checkAndFinishGame(String gameId) async {
     try {
+      print('⏰ Vérification fin de partie: $gameId');
       final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) return;
+      if (!gameDoc.exists) {
+        print('❌ Partie non trouvée: $gameId');
+        return;
+      }
 
       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-      if (game.status == GameStatus.finished) return;
+      if (game.status == GameStatus.finished) {
+        print('ℹ️ Partie déjà terminée: $gameId');
+        return;
+      }
 
       await _finishGameByTime(gameId);
     } catch (e) {
-      print('Erreur vérification fin de partie: $e');
+      print('❌ Erreur vérification fin de partie: $e');
     }
   }
 
   /// Fin de partie par temps écoulé
   static Future<void> _finishGameByTime(String gameId) async {
     try {
+      print('⏰ Tentative fin de partie par temps: $gameId');
       final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) return;
+      if (!gameDoc.exists) {
+        print('❌ Partie non trouvée: $gameId');
+        return;
+      }
 
       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      
+      if (game.status == GameStatus.finished) {
+        print('ℹ️ Partie déjà terminée: $gameId');
+        return;
+      }
+
       final blueScore = game.scores[game.player1Id] ?? 0;
       final redScore = game.scores[game.player2Id] ?? 0;
       
       String? winnerId;
-      String endReason;
+      GameEndReason endReason;
 
       if (blueScore > redScore) {
         winnerId = game.player1Id;
-        endReason = 'time_up_win_blue';
+        endReason = GameEndReason.timeUpWinBlue;
+        print('🏆 Victoire bleu par temps: $blueScore vs $redScore');
       } else if (redScore > blueScore) {
         winnerId = game.player2Id;
-        endReason = 'time_up_win_red';
+        endReason = GameEndReason.timeUpWinRed;
+        print('🏆 Victoire rouge par temps: $redScore vs $blueScore');
       } else {
         winnerId = null;
-        endReason = 'time_up_draw';
+        endReason = GameEndReason.timeUpDraw;
+        print('🤝 Match nul par temps: $blueScore - $redScore');
       }
 
       await finishGameWithReason(gameId, winnerId: winnerId, endReason: endReason);
+      print('✅ Fin de partie par temps traitée: $gameId');
+      
     } catch (e) {
-      print('Erreur fin de partie par temps: $e');
+      print('❌ Erreur fin de partie par temps: $e');
     }
   }
 
   /// Fin de partie par grille pleine
   static Future<void> _finishGameByGridFull(String gameId) async {
     try {
+      print('🔲 Tentative fin de partie par grille pleine: $gameId');
       final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) return;
+      if (!gameDoc.exists) {
+        print('❌ Partie non trouvée: $gameId');
+        return;
+      }
 
       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      
+      if (game.status == GameStatus.finished) {
+        print('ℹ️ Partie déjà terminée: $gameId');
+        return;
+      }
+
       final blueScore = game.scores[game.player1Id] ?? 0;
       final redScore = game.scores[game.player2Id] ?? 0;
       
       String? winnerId;
-      String endReason;
+      GameEndReason endReason;
 
       if (blueScore > redScore) {
         winnerId = game.player1Id;
-        endReason = 'grid_full_win_blue';
+        endReason = GameEndReason.gridFullWinBlue;
+        print('🏆 Victoire bleu par grille pleine: $blueScore vs $redScore');
       } else if (redScore > blueScore) {
         winnerId = game.player2Id;
-        endReason = 'grid_full_win_red';
+        endReason = GameEndReason.gridFullWinRed;
+        print('🏆 Victoire rouge par grille pleine: $redScore vs $blueScore');
       } else {
         winnerId = null;
-        endReason = 'grid_full_draw';
+        endReason = GameEndReason.gridFullDraw;
+        print('🤝 Match nul par grille pleine: $blueScore - $redScore');
       }
 
       await finishGameWithReason(gameId, winnerId: winnerId, endReason: endReason);
+      print('✅ Fin de partie par grille pleine traitée: $gameId');
     } catch (e) {
-      print('Erreur fin de partie par grille pleine: $e');
+      print('❌ Erreur fin de partie par grille pleine: $e');
     }
   }
 
   /// Fin de partie par tours manqués
   static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMissed) async {
     try {
+      print('⏱️ Tentative fin de partie par tours manqués: $gameId, joueur: $playerWhoMissed');
       final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) return;
+      if (!gameDoc.exists) {
+        print('❌ Partie non trouvée: $gameId');
+        return;
+      }
 
       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+      
+      if (game.status == GameStatus.finished) {
+        print('ℹ️ Partie déjà terminée: $gameId');
+        return;
+      }
+
       final winnerId = playerWhoMissed == game.player1Id ? game.player2Id : game.player1Id;
+      print('🏆 Victoire par abandon: $winnerId (adversaire: $playerWhoMissed)');
 
       await finishGameWithReason(
         gameId, 
         winnerId: winnerId, 
-        endReason: 'consecutive_missed_turns'
+        endReason: GameEndReason.consecutiveMissedTurns
       );
+      print('✅ Fin de partie par tours manqués traitée: $gameId');
     } catch (e) {
-      print('Erreur fin de partie par tours manqués: $e');
+      print('❌ Erreur fin de partie par tours manqués: $e');
     }
   }
 
@@ -453,23 +529,34 @@ class GameService {
     }
   }
 
-  /// Quitter une partie en tant que spectateur
-  static Future<void> leaveAsSpectator(String gameId, String userId) async {
+/// Quitter une partie en tant que spectateur
+static Future<void> leaveAsSpectator(String gameId, String userId) async {
+  try {
+    // Mettre à jour le document de jeu
+    await gamesCollection.doc(gameId).update({
+      'spectators': FieldValue.arrayRemove([userId]),
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    // Mettre à jour la collection spectateurs avec gestion d'erreur
     try {
-      await gamesCollection.doc(gameId).update({
-        'spectators': FieldValue.arrayRemove([userId]),
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-
-      await spectatorsCollection.doc(gameId).update({
-        'spectators': FieldValue.arrayRemove([userId]),
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      });
+      final spectatorDoc = await spectatorsCollection.doc(gameId).get();
+      if (spectatorDoc.exists) {
+        await spectatorsCollection.doc(gameId).update({
+          'spectators': FieldValue.arrayRemove([userId]),
+          'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      } else {
+        print('ℹ️ Document spectateurs non trouvé, création non nécessaire');
+      }
     } catch (e) {
-      throw Exception('Erreur quitter spectateur: $e');
+      print('⚠️ Erreur document spectateurs: $e');
     }
+  } catch (e) {
+    print('❌ Erreur quitter spectateur: $e');
+    // Ne pas relancer l'exception pour éviter les crashs
   }
-
+}
   // ============================================================
   // RÉCUPÉRATION DES PARTIES - STREAMS OPTIMISÉS
   // ============================================================
@@ -723,24 +810,42 @@ class GameService {
   }
 
   // ============================================================
-  // GESTION DES RÉSULTATS ET STATISTIQUES
+  // GESTION DES RÉSULTATS ET STATISTIQUES - CORRECTIONS APPLIQUÉES
   // ============================================================
 
   /// Sauvegarder le résultat d'une partie
-  static Future<void> saveGameResult(GameResult result) async {
+static Future<void> saveGameResult(GameResult result) async {
+  try {
+    print('💾 Début sauvegarde GameResult pour ${result.userId}: ${result.outcome}');
+    
+    // GÉNÉRER UN ID UNIQUE POUR LE RÉSULTAT
+    final resultId = generateId();
+    
+    await gameResultsCollection.doc(resultId).set(result.toMap());
+    
+    // METTRE À JOUR LES STATS (optionnel)
     try {
-      await gameResultsCollection.doc().set(result.toMap());
       await _updatePlayerStats(result);
     } catch (e) {
-      throw Exception('Erreur sauvegarde résultat: $e');
+      print('⚠️ Erreur stats non critique: $e');
     }
+    
+    print('✅ GameResult sauvegardé avec succès pour ${result.userId}');
+  } catch (e) {
+    print('❌ Erreur sauvegarde GameResult: $e');
+    // NE PAS RELANCER POUR ÉVITER DE BLOQUER LE PROCESSUS
   }
+}
 
   /// Mettre à jour les statistiques du joueur
   static Future<void> _updatePlayerStats(GameResult result) async {
     try {
+      print('📊 Mise à jour stats pour ${result.userId}');
       final userDoc = await usersCollection.doc(result.userId).get();
-      if (!userDoc.exists) return;
+      if (!userDoc.exists) {
+        print('❌ Utilisateur non trouvé: ${result.userId}');
+        return;
+      }
 
       final player = Player.fromMap(userDoc.data() as Map<String, dynamic>);
       final isWin = result.outcome == GameOutcome.win;
@@ -761,12 +866,15 @@ class GameService {
         if (newWinStreak > player.stats.bestWinStreak) {
           updates['stats.bestWinStreak'] = newWinStreak;
         }
+        print('🏆 Victoire détectée - Série: $newWinStreak');
       } else {
         updates['stats.winStreak'] = 0;
+        print('💔 Défaite ou nul - Série remise à 0');
       }
 
       if (result.pointsScored > player.stats.bestGamePoints) {
         updates['stats.bestGamePoints'] = result.pointsScored;
+        print('🎯 Nouveau record de points: ${result.pointsScored}');
       }
 
       final now = DateTime.now();
@@ -775,44 +883,84 @@ class GameService {
       updates['stats.monthlyPoints'] = player.stats.monthlyPoints + result.pointsScored;
 
       await usersCollection.doc(result.userId).update(updates);
+      print('✅ Stats mises à jour pour ${result.userId}');
     } catch (e) {
-      print('Erreur mise à jour stats: $e');
+      print('❌ Erreur mise à jour stats: $e');
     }
   }
 
-  /// Sauvegarder les résultats de tous les joueurs d'une partie
-  static Future<void> _saveGameResults(Game game) async {
-    try {
-      for (final playerId in game.players) {
-        if (playerId.startsWith('ai_')) continue;
-
-        final playerScore = game.scores[playerId] ?? 0;
-        final isWinner = game.winnerId == playerId;
-        final isDraw = game.winnerId == null;
-
-        final outcome = isWinner 
-            ? GameOutcome.win 
-            : isDraw 
-                ? GameOutcome.draw 
-                : GameOutcome.loss;
-
-        final result = GameResult(
-          userId: playerId,
-          pointsScored: playerScore,
-          outcome: outcome,
-          playedAt: game.finishedAt ?? DateTime.now(),
-        );
-
-        await saveGameResult(result);
+/// Sauvegarder les résultats de tous les joueurs d'une partie
+static Future<void> _saveGameResults(Game game) async {
+  try {
+    print('💾 Début sauvegarde résultats pour partie ${game.id}');
+    
+    // 🎯 AJOUT DE LOGS POUR DEBUG
+    print('🔍 Données de la partie:');
+    print('  - winnerId: ${game.winnerId}');
+    print('  - player1Id: ${game.player1Id}, score: ${game.scores[game.player1Id]}');
+    print('  - player2Id: ${game.player2Id}, score: ${game.scores[game.player2Id]}');
+    print('  - endReason: ${game.endReason}');
+    print('  - status: ${game.status}');
+    
+    // VÉRIFIER QUE LA PARTIE A BIEN UN WINNER_ID
+    final winnerId = game.winnerId;
+    final isDraw = winnerId == null;
+    
+    print('🏆 WinnerId: $winnerId, Draw: $isDraw');
+    
+    for (final playerId in game.players) {
+      if (playerId.startsWith('ai_')) {
+        print('🤖 Ignoré IA: $playerId');
+        continue;
       }
-    } catch (e) {
-      print('Erreur sauvegarde résultats: $e');
-    }
-  }
 
+      final playerScore = game.scores[playerId] ?? 0;
+      
+      // DÉTERMINER L'OUTCOME CORRECTEMENT
+      final GameOutcome outcome;
+      if (isDraw) {
+        outcome = GameOutcome.draw;
+      } else if (playerId == winnerId) {
+        outcome = GameOutcome.win;
+      } else {
+        outcome = GameOutcome.loss;
+      }
+
+      print('👤 Traitement joueur $playerId: score=$playerScore, outcome=$outcome');
+
+      final result = GameResult(
+        userId: playerId,
+        gameId: game.id,
+        pointsScored: playerScore,
+        outcome: outcome,
+        playedAt: game.finishedAt ?? DateTime.now(),
+        opponentId: _getOpponentId(game, playerId),
+        gridSize: game.gridSize,
+      );
+
+      await saveGameResult(result);
+    }
+    
+    print('✅ Tous les résultats sauvegardés pour partie ${game.id}');
+  } catch (e) {
+    print('❌ Erreur sauvegarde résultats: $e');
+  }
+} 
   // ============================================================
   // FONCTIONS UTILITAIRES
   // ============================================================
+
+  /// Obtenir l'ID de l'adversaire
+static String? _getOpponentId(Game game, String currentPlayerId) {
+  if (game.players.length < 2) return null;
+  
+  for (final playerId in game.players) {
+    if (playerId != currentPlayerId && !playerId.startsWith('ai_')) {
+      return playerId;
+    }
+  }
+  return null;
+}
 
   /// Vérifier si une demande de match est expirée
   static bool isMatchRequestExpired(MatchRequest request) {
@@ -971,4 +1119,22 @@ class GameService {
       print('Erreur notification refus: $e');
     }
   }
+
+  // ============================================================
+// MÉTHODE POUR L'ABANDON AVEC MISE À JOUR DES SCORES
+// ============================================================
+
+/// Mettre à jour les scores d'une partie
+static Future<void> updateGameScores(String gameId, Map<String, int> newScores) async {
+  try {
+    await gamesCollection.doc(gameId).update({
+      'scores': newScores,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    print('✅ Scores mis à jour pour partie $gameId: $newScores');
+  } catch (e) {
+    print('❌ Erreur mise à jour scores: $e');
+    throw Exception('Erreur mise à jour scores: $e');
+  }
+}
 }

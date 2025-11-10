@@ -24,7 +24,7 @@ class Game {
   final Map<String, int> reflexionTimeRemaining; // Temps par joueur
   final List<Map<String, dynamic>> moveHistory; // Historique des coups
   final String? winnerId;       // ID du gagnant
-  final GameEndReason? endReason; // Raison de fin de partie
+  final String? endReason; // CHANGEMENT: Utiliser String au lieu de GameEndReason
   final Map<String, int> consecutiveMissedTurns; // Tours manqués consécutifs
 
   Game({
@@ -53,8 +53,8 @@ class Game {
     Map<String, int>? reflexionTimeRemaining,
     List<Map<String, dynamic>>? moveHistory,
     this.winnerId,
-    this.endReason,
-    Map<String, int>? consecutiveMissedTurns, // Nouvelle propriété
+    this.endReason, // CHANGEMENT: String au lieu de GameEndReason
+    Map<String, int>? consecutiveMissedTurns,
   }) : spectators = spectators ?? [],
        gameSettings = gameSettings ?? {
          'allowSpectators': true,
@@ -63,7 +63,7 @@ class Game {
        },
        reflexionTimeRemaining = reflexionTimeRemaining ?? {},
        moveHistory = moveHistory ?? [],
-       consecutiveMissedTurns = consecutiveMissedTurns ?? {}; // Initialisation
+       consecutiveMissedTurns = consecutiveMissedTurns ?? {};
 
   Map<String, dynamic> toMap() {
     return {
@@ -92,8 +92,8 @@ class Game {
       'reflexionTimeRemaining': reflexionTimeRemaining,
       'moveHistory': moveHistory,
       'winnerId': winnerId,
-      'endReason': endReason?.toString(),
-      'consecutiveMissedTurns': consecutiveMissedTurns, // Ajout dans toMap
+      'endReason': endReason, // CHANGEMENT: Stocker directement le String
+      'consecutiveMissedTurns': consecutiveMissedTurns,
     };
   }
 
@@ -104,9 +104,9 @@ class Game {
       currentPlayer: map['currentPlayer'],
       scores: Map<String, int>.from(map['scores']),
       gridSize: map['gridSize'],
-      points: List<GridPoint>.from(map['points'].map((p) => GridPoint.fromMap(p))),
-      squares: List<Square>.from(map['squares'].map((s) => Square.fromMap(s))),
-      status: GameStatus.values.firstWhere((e) => e.toString() == map['status']),
+      points: List<GridPoint>.from((map['points'] as List).map((p) => GridPoint.fromMap(p))),
+      squares: List<Square>.from((map['squares'] as List).map((s) => Square.fromMap(s))),
+      status: _parseGameStatus(map['status']),
       // Nouvelles propriétés
       player1Id: map['player1Id'],
       player2Id: map['player2Id'],
@@ -128,14 +128,28 @@ class Game {
       reflexionTimeRemaining: Map<String, int>.from(map['reflexionTimeRemaining'] ?? {}),
       moveHistory: List<Map<String, dynamic>>.from(map['moveHistory'] ?? []),
       winnerId: map['winnerId'],
-      endReason: map['endReason'] != null
-          ? GameEndReason.values.firstWhere((e) => e.toString() == map['endReason'])
-          : null,
-      consecutiveMissedTurns: Map<String, int>.from(map['consecutiveMissedTurns'] ?? {}), // Ajout dans fromMap
+      endReason: map['endReason'], // CHANGEMENT: Lire directement le String
+      consecutiveMissedTurns: Map<String, int>.from(map['consecutiveMissedTurns'] ?? {}),
     );
   }
 
-  // Méthode utilitaire pour incrémenter les tours manqués
+  // Méthode helper pour parser GameStatus de manière sécurisée
+  static GameStatus _parseGameStatus(dynamic value) {
+    if (value == null) return GameStatus.waiting;
+    
+    try {
+      final stringValue = value.toString();
+      return GameStatus.values.firstWhere(
+        (e) => e.toString() == stringValue,
+        orElse: () => GameStatus.waiting,
+      );
+    } catch (e) {
+      print('⚠️ Impossible de parser GameStatus: $value, erreur: $e');
+      return GameStatus.waiting;
+    }
+  }
+
+  // Méthodes utilitaires existantes...
   Game copyWithConsecutiveMissedTurns(String playerId, int value) {
     final newConsecutiveMissedTurns = Map<String, int>.from(consecutiveMissedTurns);
     newConsecutiveMissedTurns[playerId] = value;
@@ -170,12 +184,10 @@ class Game {
     );
   }
 
-  // Méthode utilitaire pour réinitialiser les tours manqués d'un joueur
   Game copyWithResetMissedTurns(String playerId) {
     return copyWithConsecutiveMissedTurns(playerId, 0);
   }
 
-  // Méthode utilitaire pour vérifier si un joueur a manqué 3 tours
   bool hasPlayerMissedThreeTurns(String playerId) {
     return (consecutiveMissedTurns[playerId] ?? 0) >= 3;
   }
@@ -242,6 +254,12 @@ enum GameEndReason {
   timeUp,           // Temps écoulé
   gridFull,         // Grille complète
   playerSurrendered, // Abandon
-  threeMissedTurns, // 3 tours manqués
+  consecutiveMissedTurns, // 3 tours manqués
   disconnect,       // Déconnexion
+  timeUpWinBlue,    // Temps écoulé - victoire bleu
+  timeUpWinRed,     // Temps écoulé - victoire rouge
+  timeUpDraw,       // Temps écoulé - match nul
+  gridFullWinBlue,  // Grille pleine - victoire bleu
+  gridFullWinRed,   // Grille pleine - victoire rouge
+  gridFullDraw,     // Grille pleine - match nul
 }

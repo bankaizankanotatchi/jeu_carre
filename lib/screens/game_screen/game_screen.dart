@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -179,62 +180,113 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _timerInitialized = true;
   }
     
-  void _startListeningToGameUpdates() {
-    if (_gameId == null) return;
+void _startListeningToGameUpdates() {
+  if (_gameId == null) return;
+  
+  _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
+    if (game == null || !mounted) return;
     
-    _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
-      if (game == null || !mounted) return;
+    print('🔄 Sync Firestore - Status: ${game.status}, Temps: ${game.timeRemaining}');
+    
+    setState(() {
+      points = game.points;
+      squares = game.squares;
       
-      print('🔄 Mise à jour partie - Status: ${game.status}, Temps: ${game.timeRemaining}');
+      scores = {
+        'bleu': game.scores[game.player1Id] ?? 0,
+        'rouge': game.scores[game.player2Id] ?? 0,
+      };
       
-      setState(() {
-        points = game.points;
-        squares = game.squares;
+      // Synchroniser le currentPlayer
+      if (game.currentPlayer == game.player1Id) {
+        currentPlayer = 'bleu';
+      } else if (game.currentPlayer == game.player2Id) {
+        currentPlayer = 'rouge';
+      }
+      
+      _isMyTurn = (currentPlayer == _myPlayerColor);
+      _timeRemaining = game.timeRemaining;
+      _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
+      
+      // SYNCHRONISATION DU TEMPS DE RÉFLEXION
+      if (game.reflexionTimeRemaining != null) {
+        final currentPlayerId = currentPlayer == 'bleu' 
+            ? widget.existingGame!.player1Id! 
+            : widget.existingGame!.player2Id!;
         
+        final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
+        if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
+          print('🎯 Mise à jour temps réflexion: $reflexionTime');
+          _reflexionTimeRemaining = reflexionTime;
+        }
+      }
+      
+      // Gestion fin de partie - AMÉLIORATION ICI
+      final wasGameFinished = isGameFinished;
+      isGameFinished = game.status == GameStatus.finished;
+      
+      if (isGameFinished && !wasGameFinished) {
+        print('🎯 Partie terminée détectée via Firestore - Scores: $scores');
+        _cancelAllTimers();
+        
+        // Mettre à jour les scores finaux depuis Firestore
         scores = {
           'bleu': game.scores[game.player1Id] ?? 0,
           'rouge': game.scores[game.player2Id] ?? 0,
         };
         
-        if (game.currentPlayer == game.player1Id) {
-          currentPlayer = 'bleu';
-        } else if (game.currentPlayer == game.player2Id) {
-          currentPlayer = 'rouge';
+        if (!_resultModalShown) {
+          print('🚀 Déclenchement modal de résultat...');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_resultModalShown) {
+              _showResultModal();
+            }
+          });
         }
-        
-        _isMyTurn = (currentPlayer == _myPlayerColor);
-        _timeRemaining = game.timeRemaining;
-        _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
-        
-        // Mise à jour robuste du temps de réflexion
-        if (game.reflexionTimeRemaining != null && _currentUserId != null) {
-          final myReflexionTime = game.reflexionTimeRemaining![_currentUserId!];
-          if (myReflexionTime != null && myReflexionTime != _reflexionTimeRemaining) {
-            _reflexionTimeRemaining = myReflexionTime;
-          }
-        }
-        
-        final wasGameFinished = isGameFinished;
-        isGameFinished = game.status == GameStatus.finished;
-        
-        if (isGameFinished && !wasGameFinished) {
-          print('🎯 Partie terminée détectée via Firestore');
-          _cancelAllTimers();
-          
-          if (!_resultModalShown) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_resultModalShown) {
-                _showResultModal();
-              }
-            });
-          }
-        }
-      });
-    }, onError: (error) {
-      print('❌ Erreur écoute partie: $error');
+      }
     });
+  }, onError: (error) {
+    print('❌ Erreur écoute partie: $error');
+  });
+}
+void _handleMissedTurnFromFirestore(String playerId) {
+  if (!_isOnlineGame || _gameId == null) return;
+  
+  // Vérifier que c'est bien le tour de ce joueur
+  final isCurrentPlayer = (playerId == widget.existingGame!.player1Id && currentPlayer == 'bleu') ||
+                         (playerId == widget.existingGame!.player2Id && currentPlayer == 'rouge');
+  
+  if (isCurrentPlayer && !isGameFinished) {
+    print('🔄 Tour manqué détecté depuis Firestore pour: $playerId');
+    
+    final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
+    final newMissedTurns = currentMissedTurns + 1;
+    
+    final updatedMissedTurns = {
+      ...widget.existingGame!.consecutiveMissedTurns,
+      playerId: newMissedTurns
+    };
+    
+    // UTILISER UN TRY-CATCH POUR ÉVITER LES ERREURS BLOQUANTES
+    try {
+      GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
+    } catch (e) {
+      print('⚠️ Erreur non critique mise à jour tours manqués: $e');
+    }
+    
+    // Changer de joueur
+    final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+    final nextPlayerId = nextPlayer == 'bleu' 
+        ? widget.existingGame!.player1Id! 
+        : widget.existingGame!.player2Id!;
+    
+    try {
+      GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
+    } catch (e) {
+      print('⚠️ Erreur non critique changement joueur: $e');
+    }
   }
-
+}
   void _loadSpectators() {
     if (_gameId == null) return;
     
@@ -330,33 +382,30 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _executeAIMove(GridPoint aiMove) {
-    if (isGameFinished || !mounted) return;
+void _executeAIMove(GridPoint aiMove) {
+  if (isGameFinished || !mounted) return;
+  
+  setState(() {
+    points.add(aiMove);
+    _startRadarAnimation(aiMove);
+    final newSquares = GameLogic.checkSquares(points, widget.gridSize, aiPlayerId, aiMove.x, aiMove.y);
+    squares.addAll(newSquares);
+    scores[aiPlayerId] = scores[aiPlayerId]! + newSquares.length;
     
-    setState(() {
-      points.add(aiMove);
-      _startRadarAnimation(aiMove);
-      final newSquares = GameLogic.checkSquares(points, widget.gridSize, aiPlayerId, aiMove.x, aiMove.y);
-      squares.addAll(newSquares);
-      scores[aiPlayerId] = scores[aiPlayerId]! + newSquares.length;
-      
-      if (points.length >= widget.gridSize * widget.gridSize) {
-        isGameFinished = true;
-        _cancelAllTimers();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_resultModalShown) {
-            _showResultModal();
-          }
-        });
-      } else {
-        _resetReflexionTimer();
-        _switchPlayer();
-        if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
-          _startAITurn();
+    if (points.length >= widget.gridSize * widget.gridSize) {
+      isGameFinished = true;
+      _cancelAllTimers();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_resultModalShown) {
+          _showResultModal();
         }
-      }
-    });
-  }
+      });
+    } else {
+      _resetReflexionTimer();
+      _switchPlayer();
+    }
+  });
+}
 
   void _initializeGame() {
     points = [];
@@ -383,8 +432,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
         });
         
-        print('⏰ Temps jeu: $_timeRemaining');
-        
         if (_isOnlineGame && _gameId != null) {
           GameService.updateGameTime(_gameId!, _timeRemaining);
         }
@@ -396,56 +443,58 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _startReflexionTimer() {
-    _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
+void _startReflexionTimer() {
+  _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+    if (!mounted) {
+      timer.cancel();
+      return;
+    }
 
+    if (_isOnlineGame && _isMyTurn) {
+      // APPROCHE CLIENT MAÎTRE : Seul le client dont c'est le tour décrémente
       if (_reflexionTimeRemaining > 0) {
         setState(() => _reflexionTimeRemaining--);
         
-        // Mise à jour atomique du temps de réflexion
-        if (_isOnlineGame && _gameId != null && _currentUserId != null && _isMyTurn) {
+        // Mettre à jour Firestore (sans attendre pour la fluidité)
+        if (_gameId != null && _currentUserId != null) {
           GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, _reflexionTimeRemaining);
         }
       } else {
-        print('⏱️ Temps réflexion écoulé');
+        // Temps écoulé
+        print('⏱️ Temps réflexion écoulé (maître)');
+        _handleMissedTurnFromFirestore(_currentUserId!);
+      }
+    } else if (!_isOnlineGame) {
+      // Logique locale pour les parties hors ligne
+      if (_reflexionTimeRemaining > 0) {
+        setState(() => _reflexionTimeRemaining--);
+      } else {
+        print('⏱️ Temps réflexion écoulé (local)');
         _handleMissedTurn();
-        if (mounted) {
-          _resetReflexionTimer();
-        }
+        _resetReflexionTimer();
       }
-    });
-  }
-
-  void _handleMissedTurn() {
-    if (_isOnlineGame && _gameId != null && _currentUserId != null) {
-      // Pour les parties en ligne, la gestion se fait via Firestore
-      final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[_currentUserId!] ?? 0;
-      final newMissedTurns = currentMissedTurns + 1;
-      
-      final updatedMissedTurns = {
-        ...widget.existingGame!.consecutiveMissedTurns,
-        _currentUserId!: newMissedTurns
-      };
-      
-      GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
-    } else {
-      // Pour les parties locales
-      final currentPlayerId = currentPlayer;
-      final currentMissedTurns = 0; // À adapter selon votre logique locale
-      final newMissedTurns = currentMissedTurns + 1;
-      
-      if (newMissedTurns >= 3) {
-        _endGameByMissedTurns(currentPlayerId);
-        return;
-      }
-      
-      _switchPlayer();
     }
+  });
+}
+
+void _handleMissedTurn() {
+  if (_isOnlineGame && _gameId != null && _currentUserId != null) {
+    // Pour les parties en ligne, utiliser la méthode Firestore
+    _handleMissedTurnFromFirestore(_currentUserId!);
+  } else {
+    // Logique locale existante...
+    final currentPlayerId = currentPlayer;
+    final currentMissedTurns = 0;
+    final newMissedTurns = currentMissedTurns + 1;
+    
+    if (newMissedTurns >= 3) {
+      _endGameByMissedTurns(currentPlayerId);
+      return;
+    }
+    
+    _switchPlayer();
   }
+}
 
   void _endGameByMissedTurns(String playerWhoMissed) async {
     print('🏁 Fin de partie par tours manqués: $playerWhoMissed');
@@ -458,7 +507,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       await GameService.finishGameWithReason(
         _gameId!,
         winnerId: winnerId,
-        endReason: 'consecutive_missed_turns'
+        endReason: GameEndReason.consecutiveMissedTurns
       );
     } else {
       setState(() {
@@ -480,56 +529,80 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     GameStartService().exitGame();
   }
 
-  void _resetReflexionTimer() {
-    _reflexionTimer.cancel();
-    setState(() => _reflexionTimeRemaining = widget.reflexionTime);
-    
-    // Réinitialisation en ligne
-    if (_isOnlineGame && _gameId != null && _currentUserId != null && _isMyTurn) {
+void _resetReflexionTimer() {
+  _reflexionTimer.cancel();
+  
+  if (_isOnlineGame) {
+    // Pour les parties en ligne, réinitialiser via Firestore
+    if (_gameId != null && _currentUserId != null && _isMyTurn) {
+      setState(() => _reflexionTimeRemaining = widget.reflexionTime);
       GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, widget.reflexionTime);
     }
-    
+    _startReflexionTimer();
+  } else {
+    // Logique locale
+    setState(() => _reflexionTimeRemaining = widget.reflexionTime);
     _startReflexionTimer();
   }
+}
 
-  void _switchPlayer() {
+void _switchPlayer() {
+  if (_isOnlineGame) {
+    if (_gameId != null && widget.existingGame != null) {
+      final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+      final nextPlayerId = nextPlayer == 'bleu' 
+          ? widget.existingGame!.player1Id! 
+          : widget.existingGame!.player2Id!;
+      
+      print('🔄 Switch vers: $nextPlayer (ID: $nextPlayerId)');
+      
+      // Mettre à jour le currentPlayer dans Firestore
+      GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
+    }
+  } else {
+    // Logique locale inchangée
     setState(() {
       currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
       _reflexionTimeRemaining = widget.reflexionTime;
-      if (_isOnlineGame) {
-        _isMyTurn = (currentPlayer == _myPlayerColor);
-      }
-      
-      if (_isOnlineGame && _gameId != null && widget.existingGame != null) {
-        final nextPlayerId = currentPlayer == 'bleu' 
-            ? widget.existingGame!.player1Id! 
-            : widget.existingGame!.player2Id!;
-        GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
-      }
     });
-  }
-
-  void _endGameByTime() async {
-    print('🏁 Fin de partie par temps écoulé');
     
-    if (_isOnlineGame && _gameId != null) {
-      // La fin de partie est gérée automatiquement par GameService
+    if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
+      _startAITurn();
+    }
+  }
+}
+
+void _endGameByTime() async {
+  print('🏁 Fin de partie par temps écoulé');
+  
+  if (_isOnlineGame && _gameId != null) {
+    try {
+      // APPELER DIRECTEMENT LE SERVICE SANS ATTENDRE
       await GameService.updateGameTime(_gameId!, 0);
-    } else {
+      print('✅ Temps mis à jour à 0 dans Firestore');
+    } catch (e) {
+      print('❌ Erreur mise à jour temps: $e');
+      // FALLBACK: Marquer la partie comme terminée localement
       setState(() {
         isGameFinished = true;
         _cancelAllTimers();
       });
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_resultModalShown) {
-          _showResultModal();
-        }
-      });
+      _showResultModal();
     }
-    GameStartService().exitGame();
+  } else {
+    setState(() {
+      isGameFinished = true;
+      _cancelAllTimers();
+    });
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_resultModalShown) {
+        _showResultModal();
+      }
+    });
   }
-
+  GameStartService().exitGame();
+}
   void _onPointTap(int x, int y) async {
     if (isGameFinished) return;
     
@@ -579,42 +652,34 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           SnackBar(content: Text('Erreur lors du coup'), backgroundColor: Colors.red),
         );
       }
-    } else {
-      setState(() {
-        points.add(newPoint);
-        _startRadarAnimation(newPoint);
-        final newSquares = GameLogic.checkSquares(points, widget.gridSize, currentPlayer, x, y);
-        
-        if (newSquares.isNotEmpty) {
-          squares.addAll(newSquares);
-          _scoreAnimationController.forward().then((_) => _scoreAnimationController.reverse());
-        }
-        
-        scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
-        
-        if (points.length >= widget.gridSize * widget.gridSize) {
-          isGameFinished = true;
-          _cancelAllTimers();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_resultModalShown) {
-              _showResultModal();
-            }
-          });
-        } else {
-          if (newSquares.isEmpty) {
-            _resetReflexionTimer();
-            _switchPlayer();
-          } else {
-            _resetReflexionTimer();
+  } else {
+    setState(() {
+      points.add(newPoint);
+      _startRadarAnimation(newPoint);
+      final newSquares = GameLogic.checkSquares(points, widget.gridSize, currentPlayer, x, y);
+      
+      if (newSquares.isNotEmpty) {
+        squares.addAll(newSquares);
+        _scoreAnimationController.forward().then((_) => _scoreAnimationController.reverse());
+      }
+      
+      scores[currentPlayer] = scores[currentPlayer]! + newSquares.length;
+      
+      if (points.length >= widget.gridSize * widget.gridSize) {
+        isGameFinished = true;
+        _cancelAllTimers();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_resultModalShown) {
+            _showResultModal();
           }
-          
-          if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
-            _startAITurn();
-          }
-        }
-      });
-    }
+        });
+      } else {
+        _resetReflexionTimer();
+        _switchPlayer();
+      }
+    });
   }
+}
 
   Color _getPlayerColor(String playerId) {
     if (_isOnlineGame && widget.existingGame != null) {
@@ -630,28 +695,33 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
-  void _showResultModal() {
-    if (_resultModalShown || !mounted) return;
-    _resultModalShown = true;
+void _showResultModal() {
+  if (_resultModalShown || !mounted) return;
+  _resultModalShown = true;
+  
+  print('🎊 AFFICHAGE MODAL - Scores: $scores, En ligne: $_isOnlineGame');
+  
+  // S'assurer que tous les timers sont arrêtés
+  _cancelAllTimers();
+  
+  Future.delayed(Duration(milliseconds: 500), () {
+    if (!mounted) {
+      print('❌ Modal non monté');
+      return;
+    }
     
-    print('🎊 Affichage modal de résultat');
-    
-    // S'assurer que tous les timers sont arrêtés
-    _cancelAllTimers();
-    
-    Future.delayed(Duration(milliseconds: 1000), () {
-      if (!mounted) return;
-      
-      showDialog(
-        context: context,
-        barrierColor: Colors.black.withOpacity(0.9),
-        barrierDismissible: false,
-        builder: (BuildContext context) => _buildResultModal(),
-      ).then((_) {
-        _resultModalShown = false;
-      });
+    print('✅ Affichage du modal de résultat...');
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      barrierDismissible: false,
+      builder: (BuildContext context) => _buildResultModal(),
+    ).then((_) {
+      _resultModalShown = false;
+      print('🔒 Modal fermé');
     });
-  }
+  });
+}
 
   Widget _buildReflexionTimer() {
     return Container(
@@ -671,20 +741,39 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           )
         ],
-      ),
+      )
     );
   }
 
-  Widget _buildResultModal() {
-    final isDraw = scores['bleu']! == scores['rouge']!;
-    final winner = scores['bleu']! > scores['rouge']! ? 'bleu' : 'rouge';
-    final winnerName = winner == 'bleu' ? _bluePlayerName : _redPlayerName;
-    
-    return Stack(
-      children: [
-        Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: EdgeInsets.all(20),
+Widget _buildResultModal() {
+  final isDraw = scores['bleu']! == scores['rouge']!;
+  final winner = scores['bleu']! > scores['rouge']! ? 'bleu' : 'rouge';
+  final winnerName = winner == 'bleu' ? _bluePlayerName : _redPlayerName;
+  
+  // Déterminer si l'utilisateur actuel a gagné (pour les parties en ligne)
+  bool isCurrentUserWinner = false;
+  String resultMessage = '';
+  
+  if (_isOnlineGame) {
+    if (isDraw) {
+      resultMessage = 'MATCH NUL';
+    } else if (winner == 'bleu' && _myPlayerColor == 'bleu') {
+      isCurrentUserWinner = true;
+      resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
+    } else if (winner == 'rouge' && _myPlayerColor == 'rouge') {
+      isCurrentUserWinner = true;
+      resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
+    } else {
+      resultMessage = '😔 VOUS AVEZ PERDU';
+    }
+  }
+  
+  return Stack(
+    children: [
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.all(20),
+        child: SingleChildScrollView(
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.all(24),
@@ -716,7 +805,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     letterSpacing: 2,
                   ),
                 ),
-                SizedBox(height: 20),
+                if (_isOnlineGame && !isDraw) ...[
+                  SizedBox(height: 10),
+                  Text(
+                    resultMessage,
+                    style: TextStyle(
+                      color: isCurrentUserWinner ? Colors.yellow : Colors.white70,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                SizedBox(height: 10),
                 if (!isDraw) _buildWinnerProfile(winner, winnerName),
                 if (isDraw) _buildDrawProfiles(),
                 SizedBox(height: 20),
@@ -857,9 +958,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _buildWinnerProfile(String player, String playerName) {
     final color = _getPlayerColor(player);
@@ -1216,18 +1318,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             TextButton(
               onPressed: () async {
                 Navigator.of(context).pop();
-                if (_isOnlineGame && _gameId != null) {
-                  final winnerId = _myPlayerColor == 'bleu' 
-                      ? widget.existingGame!.player2Id 
-                      : widget.existingGame!.player1Id;
-                  await GameService.finishGameWithReason(
-                    _gameId!,
-                    winnerId: winnerId,
-                    endReason: 'player_surrendered'
-                  );
-                } else {
-                  _endGameByForfeit();
-                }
+                _endGameByForfeit();
               },
               child: Text('Abandonner', style: TextStyle(color: Colors.red)),
             ),
@@ -1268,38 +1359,67 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _endGameByForfeit() async {
-    final loser = currentPlayer;
-    final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+void _endGameByForfeit() async {
+  final loser = currentPlayer;
+  final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+  
+  if (_isOnlineGame && _gameId != null) {
+    final winnerId = _myPlayerColor == 'bleu' 
+        ? widget.existingGame!.player2Id 
+        : widget.existingGame!.player1Id;
+    final loserId = _myPlayerColor == 'bleu' 
+        ? widget.existingGame!.player1Id 
+        : widget.existingGame!.player2Id;
     
-    if (_isOnlineGame && _gameId != null) {
-      final winnerId = _myPlayerColor == 'bleu' 
-          ? widget.existingGame!.player2Id 
-          : widget.existingGame!.player1Id;
+    try {
+      // 1. CALCULER LES NOUVEAUX SCORES (même logique que local)
+      final updatedScores = {
+        winnerId!: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
+        loserId!: 0
+      };
       
+      print('🎯 Mise à jour scores abandon - Gagnant: ${updatedScores[winnerId]}, Perdant: ${updatedScores[loserId]}');
+      
+      // 2. METTRE À JOUR LES SCORES DANS FIRESTORE
+      await GameService.updateGameScores(_gameId!, updatedScores);
+      
+      // 3. MAINTENANT TERMINER LA PARTIE
       await GameService.finishGameWithReason(
         _gameId!,
         winnerId: winnerId,
-        endReason: 'player_surrendered'
+        endReason: GameEndReason.playerSurrendered
       );
-    } else {
-      setState(() {
-        isGameFinished = true;
-        _cancelAllTimers();
-        final lostPoints = scores[loser] ?? 0;
-        scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
-        scores[loser] = 0;
-      });
       
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_resultModalShown) {
-          _showResultModal();
-        }
-      });
+      print('✅ Abandon traité avec succès');
+      
+    } catch (e) {
+      print('❌ Erreur lors de l\'abandon: $e');
+      // Fallback: terminer la partie même si la mise à jour des scores échoue
+      await GameService.finishGameWithReason(
+        _gameId!,
+        winnerId: winnerId,
+        endReason: GameEndReason.playerSurrendered
+      );
     }
-    GameStartService().exitGame();
+    
+  } else {
+    // Logique locale inchangée
+    setState(() {
+      isGameFinished = true;
+      _cancelAllTimers();
+      final lostPoints = scores[loser] ?? 0;
+      scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
+      scores[loser] = 0;
+    });
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_resultModalShown) {
+        _showResultModal();
+      }
+    });
   }
-
+  GameStartService().exitGame();
+}
   Widget _buildWinnerStatus() {
     String winner;
     String winnerName;
@@ -1686,10 +1806,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
   
+
+
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isGameFinished && !_resultModalShown) {
+        print('🏁 Build - Partie terminée, déclenchement modal...');
         _showResultModal();
       }
     });
@@ -1766,3 +1889,4 @@ class GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+

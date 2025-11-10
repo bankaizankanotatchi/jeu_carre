@@ -309,99 +309,102 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  // WIDGET POUR L'HISTORIQUE DYNAMIQUE
-  Widget _buildGameHistoryItem(Game game, int index) {
-    return FutureBuilder<String>(
-      future: _getOpponentName(game),
-      builder: (context, opponentSnapshot) {
-        final opponentName = opponentSnapshot.data ?? 'Chargement...';
-        final result = _getGameResult(game);
-        final score = _getGameScore(game);
-        final points = _getPointsEarned(game);
-        final date = _formatRelativeDate(game.finishedAt ?? game.updatedAt);
-        
-        final Color color = result == 'win' 
-          ? Color(0xFF00d4ff)
-          : result == 'loss' 
-            ? Color(0xFFff006e)
-            : Color(0xFFFFD700);
+// WIDGET POUR L'HISTORIQUE DYNAMIQUE
+Widget _buildGameHistoryItem(Game game, int index) {
+  return FutureBuilder<String>(
+    future: _getOpponentName(game),
+    builder: (context, opponentSnapshot) {
+      final opponentName = opponentSnapshot.data ?? 'Chargement...';
+      final result = _getGameResult(game);
+      final score = _getGameScore(game);
+      
+      // Récupérer le score de l'utilisateur courant
+      final currentUserId = _auth.currentUser?.uid;
+      final myScore = currentUserId != null ? game.scores[currentUserId] ?? 0 : 0;
+      
+      final date = _formatRelativeDate(game.finishedAt ?? game.updatedAt);
+      
+      final Color color = result == 'win' 
+        ? Color(0xFF00d4ff)
+        : result == 'loss' 
+          ? Color(0xFFff006e)
+          : Color(0xFFFFD700);
 
-        final IconData icon = result == 'win' 
-          ? Icons.emoji_events
-          : result == 'loss' 
-            ? Icons.sentiment_dissatisfied 
-            : Icons.handshake;
+      final IconData icon = result == 'win' 
+        ? Icons.emoji_events
+        : result == 'loss' 
+          ? Icons.sentiment_dissatisfied 
+          : Icons.handshake;
 
-        return Container(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            color: Color(0xFF1a0033),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Color(0xFF4a0080)),
+      return Container(
+        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: Color(0xFF1a0033),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Color(0xFF4a0080)),
+        ),
+        child: ListTile(
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withOpacity(0.2),
+              border: Border.all(color: color),
+            ),
+            child: Icon(icon, color: color, size: 20),
           ),
-          child: ListTile(
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withOpacity(0.2),
-                border: Border.all(color: color),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            title: Text(
-              opponentName,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Grille ${game.gridSize}×${game.gridSize}',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  date,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  score,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  '+$points pts',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+          title: Text(
+            opponentName,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        );
-      },
-    );
-  }
-
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Grille ${game.gridSize}×${game.gridSize}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 12,
+                ),
+              ),
+              Text(
+                date,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                score,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                '+ $myScore pts', // Afficher le score marqué pendant le match
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
   Widget _buildAchievementItem(Map<String, dynamic> achievement, int index) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
