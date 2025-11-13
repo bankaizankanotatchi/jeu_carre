@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/feedback.dart';
 import 'package:jeu_carre/models/message.dart';
 import 'package:jeu_carre/models/player.dart';
-import 'package:jeu_carre/services/feedback_service.dart';
 import 'package:jeu_carre/widgets/feedback_notification.dart';
 
 class FeedbackNotificationService {

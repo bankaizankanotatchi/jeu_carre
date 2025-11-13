@@ -8,10 +8,11 @@ import 'package:jeu_carre/screens/navigation_screen.dart';
 import 'package:jeu_carre/screens/first_launch_rules_screen.dart';
 import 'package:jeu_carre/screens/signup_screen.dart';
 import 'package:jeu_carre/services/feedback_notification_service.dart';
+import 'package:jeu_carre/services/match_request_declined_notification.dart';
 import 'package:jeu_carre/services/match_request_notification.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
 import 'package:jeu_carre/services/presence_service.dart';
-import 'package:jeu_carre/services/game_start_service.dart'; // 🔥 AJOUTER
+import 'package:jeu_carre/services/game_start_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +35,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MainWrapper(), // 🔥 REMPLACER AppInitializer par MainWrapper
+      home: const MainWrapper(),
       routes: {
         '/home': (context) => const NavigationScreen(),
         '/signup': (context) => const SignupScreen(),
@@ -47,7 +48,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// 🔥 AJOUTER CE CODE - MainWrapper qui remplace AppInitializer
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
 
@@ -61,6 +61,9 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
   final MatchNotificationService _matchNotificationService = MatchNotificationService();
   final FeedbackNotificationService _feedbackNotificationService = FeedbackNotificationService(); 
   final GameStartService _gameStartService = GameStartService(); 
+  
+  // 🔥 NOUVELLE INSTANCE DU SERVICE DE NOTIFICATION DES MATCHS REFUSÉS
+  final MatchNotificationDeclinedService _matchDeclinedNotificationService = MatchNotificationDeclinedService();
 
   @override
   void initState() {
@@ -75,6 +78,10 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _updatePresenceStatus(false);
+    
+    // 🔥 NETTOYAGE DU NOUVEAU SERVICE
+    _matchDeclinedNotificationService.dispose();
+    
     _matchNotificationService.dispose();
     _gameStartService.dispose();
     _feedbackNotificationService.dispose(); 
@@ -89,7 +96,11 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _matchNotificationService.restart();
         _gameStartService.restart();
         _feedbackNotificationService.restart(); 
+        
+        // 🔥 REDÉMARRER LE NOUVEAU SERVICE
+        _matchDeclinedNotificationService.restart();
         break;
+        
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.inactive:
@@ -98,6 +109,9 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _matchNotificationService.stop();
         _gameStartService.stop();
         _feedbackNotificationService.stop();
+        
+        // 🔥 ARRÊTER LE NOUVEAU SERVICE
+        _matchDeclinedNotificationService.stop();
         break;
     }
   }
@@ -135,8 +149,11 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _matchNotificationService.initialize(context);
-       _gameStartService.initialize(context);
-       _feedbackNotificationService.initialize(context); 
+        _gameStartService.initialize(context);
+        _feedbackNotificationService.initialize(context); 
+        
+        // 🔥 INITIALISER LE NOUVEAU SERVICE
+        _matchDeclinedNotificationService.initialize(context);
       }
     });
     
