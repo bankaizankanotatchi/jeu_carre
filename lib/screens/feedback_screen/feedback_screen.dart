@@ -58,7 +58,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      _scrollController.jumpTo(0.0);
     }
   }
 
@@ -707,11 +707,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               // Liste des messages
               Expanded(
                 child: StreamBuilder<List<Message>>(
+                  
                   stream: _messagesStream,
                   builder: (context, snapshot) {
                     print('🔄 StreamBuilder state: ${snapshot.connectionState}');
                     print('📊 Has data: ${snapshot.hasData}, Data: ${snapshot.data?.length ?? 0} messages');
                     print('⚠️ Has error: ${snapshot.hasError}, Error: ${snapshot.error}');
+                    
+                    
                     
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return _buildLoadingIndicator();
@@ -731,7 +734,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
                     // Sort messages by date (oldest first for proper display)
                     final sortedMessages = List<Message>.from(messages)
-                      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
                     return ListView.builder(
                       controller: _scrollController,

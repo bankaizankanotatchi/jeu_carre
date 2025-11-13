@@ -26,13 +26,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Stream<List<Game>>? _gameHistoryStream;
 
   // Données fictives pour les succès
-  final List<Map<String, dynamic>> _achievements = [
-    {'title': 'Première Victoire', 'description': 'Gagner votre première partie', 'icon': '🏆', 'unlocked': true, 'progress': 1.0},
-    {'title': 'Série de 10', 'description': 'Gagner 10 parties consécutives', 'icon': '🔥', 'unlocked': false, 'progress': 0.7},
-    {'title': 'Maître du Shikaku', 'description': 'Atteindre 1000 points', 'icon': '👑', 'unlocked': true, 'progress': 1.0},
-    {'title': 'Stratège Confirmé', 'description': 'Battre l\'IA Expert 5 fois', 'icon': '🎯', 'unlocked': false, 'progress': 0.4},
-    {'title': 'Invincible', 'description': 'Gagner 50 parties', 'icon': '⚡', 'unlocked': true, 'progress': 1.0},
-  ];
+  // final List<Map<String, dynamic>> _achievements = [
+  //   {'title': 'Première Victoire', 'description': 'Gagner votre première partie', 'icon': '🏆', 'unlocked': true, 'progress': 1.0},
+  //   {'title': 'Série de 10', 'description': 'Gagner 10 parties consécutives', 'icon': '🔥', 'unlocked': false, 'progress': 0.7},
+  //   {'title': 'Maître du Shikaku', 'description': 'Atteindre 1000 points', 'icon': '👑', 'unlocked': true, 'progress': 1.0},
+  //   {'title': 'Stratège Confirmé', 'description': 'Battre l\'IA Expert 5 fois', 'icon': '🎯', 'unlocked': false, 'progress': 0.4},
+  //   {'title': 'Invincible', 'description': 'Gagner 50 parties', 'icon': '⚡', 'unlocked': true, 'progress': 1.0},
+  // ];
 
   @override
   void initState() {
@@ -151,18 +151,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   // Méthode pour obtenir les points gagnés
-  int _getPointsEarned(Game game) {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return 0;
+  // int _getPointsEarned(Game game) {
+  //   final currentUserId = _auth.currentUser?.uid;
+  //   if (currentUserId == null) return 0;
     
-    final myScore = game.scores[currentUserId] ?? 0;
-    final result = _getGameResult(game);
+  //   final myScore = game.scores[currentUserId] ?? 0;
+  //   final result = _getGameResult(game);
     
-    // Logique de calcul des points (à adapter selon vos règles)
-    if (result == 'win') return myScore * 2; // Bonus pour victoire
-    if (result == 'draw') return myScore;
-    return myScore ~/ 2; // Réduction pour défaite
-  }
+  //   // Logique de calcul des points (à adapter selon vos règles)
+  //   if (result == 'win') return myScore * 2; // Bonus pour victoire
+  //   if (result == 'draw') return myScore;
+  //   return myScore ~/ 2; // Réduction pour défaite
+  // }
 
   Widget _buildWinRateRing(double winPercentage, double lossPercentage, double drawPercentage) {
     final total = winPercentage + lossPercentage + drawPercentage;
@@ -325,10 +325,10 @@ Widget _buildGameHistoryItem(Game game, int index) {
       final date = _formatRelativeDate(game.finishedAt ?? game.updatedAt);
       
       final Color color = result == 'win' 
-        ? Color(0xFF00d4ff)
+        ? Color(0xFFFFD700)
         : result == 'loss' 
           ? Color(0xFFff006e)
-          : Color(0xFFFFD700);
+          : Color(0xFF00d4ff);
 
       final IconData icon = result == 'win' 
         ? Icons.emoji_events
@@ -405,80 +405,80 @@ Widget _buildGameHistoryItem(Game game, int index) {
     },
   );
 }
-  Widget _buildAchievementItem(Map<String, dynamic> achievement, int index) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFF4a0080),
-          width: 2,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: achievement['unlocked'] 
-                ? Color(0xFF00d4ff).withOpacity(0.2)
-                : Color(0xFF4a0080).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(
-                color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFF4a0080),
-              ),
-            ),
-            child: Center(
-              child: Text(
-                achievement['icon'],
-                style: TextStyle(fontSize: 20),
-              ),
-            ),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  achievement['title'],
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  achievement['description'],
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
-                if (!achievement['unlocked']) ...[
-                  SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: achievement['progress'],
-                    backgroundColor: Color(0xFF2d0052),
-                    color: Color(0xFFe040fb),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Icon(
-            achievement['unlocked'] ? Icons.verified : Icons.lock_outline,
-            color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFFe040fb),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildAchievementItem(Map<String, dynamic> achievement, int index) {
+  //   return Container(
+  //     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     padding: EdgeInsets.all(16),
+  //     decoration: BoxDecoration(
+  //       color: Color(0xFF1a0033),
+  //       borderRadius: BorderRadius.circular(12),
+  //       border: Border.all(
+  //         color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFF4a0080),
+  //         width: 2,
+  //       ),
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         Container(
+  //           width: 50,
+  //           height: 50,
+  //           decoration: BoxDecoration(
+  //             color: achievement['unlocked'] 
+  //               ? Color(0xFF00d4ff).withOpacity(0.2)
+  //               : Color(0xFF4a0080).withOpacity(0.2),
+  //             borderRadius: BorderRadius.circular(25),
+  //             border: Border.all(
+  //               color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFF4a0080),
+  //             ),
+  //           ),
+  //           child: Center(
+  //             child: Text(
+  //               achievement['icon'],
+  //               style: TextStyle(fontSize: 20),
+  //             ),
+  //           ),
+  //         ),
+  //         SizedBox(width: 16),
+  //         Expanded(
+  //           child: Column(
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+  //               Text(
+  //                 achievement['title'],
+  //                 style: TextStyle(
+  //                   color: Colors.white,
+  //                   fontWeight: FontWeight.w700,
+  //                   fontSize: 16,
+  //                 ),
+  //               ),
+  //               SizedBox(height: 4),
+  //               Text(
+  //                 achievement['description'],
+  //                 style: TextStyle(
+  //                   color: Colors.white.withOpacity(0.7),
+  //                   fontSize: 12,
+  //                 ),
+  //               ),
+  //               if (!achievement['unlocked']) ...[
+  //                 SizedBox(height: 8),
+  //                 LinearProgressIndicator(
+  //                   value: achievement['progress'],
+  //                   backgroundColor: Color(0xFF2d0052),
+  //                   color: Color(0xFFe040fb),
+  //                   borderRadius: BorderRadius.circular(10),
+  //                 ),
+  //               ],
+  //             ],
+  //           ),
+  //         ),
+  //         Icon(
+  //           achievement['unlocked'] ? Icons.verified : Icons.lock_outline,
+  //           color: achievement['unlocked'] ? Color(0xFF00d4ff) : Color(0xFFe040fb),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildStatsTab() {
     if (_currentPlayer == null) {
@@ -697,15 +697,15 @@ Widget _buildGameHistoryItem(Game game, int index) {
     );
   }
 
-  Widget _buildAchievementsTab() {
-    return ListView.builder(
-      padding: EdgeInsets.symmetric(vertical: 16),
-      itemCount: _achievements.length,
-      itemBuilder: (context, index) {
-        return _buildAchievementItem(_achievements[index], index);
-      },
-    );
-  }
+  // Widget _buildAchievementsTab() {
+  //   return ListView.builder(
+  //     padding: EdgeInsets.symmetric(vertical: 16),
+  //     itemCount: _achievements.length,
+  //     itemBuilder: (context, index) {
+  //       return _buildAchievementItem(_achievements[index], index);
+  //     },
+  //   );
+  // }
 
   Widget _buildAnimatedParticle(int index) {
     final random = (index * 123) % 100;
@@ -882,7 +882,7 @@ Widget _buildGameHistoryItem(Game game, int index) {
               tabs: [
                 Tab(icon: Icon(Icons.bar_chart), text: 'STATS'),
                 Tab(icon: Icon(Icons.history), text: 'HISTORIQUE'),
-                Tab(icon: Icon(Icons.emoji_events), text: 'SUCCÈS'),
+                // Tab(icon: Icon(Icons.emoji_events), text: 'SUCCÈS'),
               ],
             ),
           ),
@@ -893,7 +893,7 @@ Widget _buildGameHistoryItem(Game game, int index) {
               children: [
                 _buildStatsTab(),
                 _buildHistoryTab(),
-                _buildAchievementsTab(),
+                // _buildAchievementsTab(),
               ],
             ),
           ),

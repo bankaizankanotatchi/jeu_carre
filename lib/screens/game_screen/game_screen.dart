@@ -42,6 +42,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Map<String, int> scores = {'bleu': 0, 'rouge': 0};
   bool isGameFinished = false;
   bool _resultModalShown = false;
+  bool _isSpectator = false;
+
+  void _checkUserStatus() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null && widget.existingGame != null) {
+      // Vérifier si l'utilisateur est un joueur
+      final isPlayer = widget.existingGame!.players.contains(currentUser.uid);
+      
+      // Si ce n'est pas un joueur, c'est un spectateur
+      _isSpectator = !isPlayer;
+      
+      if (_isSpectator) {
+        print('👀 Utilisateur connecté en tant que spectateur');
+        _joinAsSpectator();
+      } else {
+        print('🎮 Utilisateur connecté en tant que joueur');
+      }
+    }
+  }
 
   late AnimationController _radarAnimationController;
   late Animation<double> _radarAnimation;
@@ -73,29 +92,43 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _isMyTurn = false;
   bool _isOnlineGame = false;
 
-  String get _bluePlayerName {
-    if (widget.isAgainstAI) {
-      return _currentUserPlayer?.username ?? 'VOUS';
-    } else if (_isOnlineGame) {
-      return _myPlayerColor == 'bleu' 
-          ? (_currentUserPlayer?.username ?? 'VOUS')
-          : (_opponentPlayer?.username ?? 'ADVERSAIRE');
-    } else {
-      return 'BLEU';
-    }
+String get _bluePlayerName {
+  String name;
+  if (widget.isAgainstAI) {
+    name = _currentUserPlayer?.username ?? 'VOUS';
+  } else if (_isOnlineGame) {
+    name = _myPlayerColor == 'bleu' 
+        ? (_currentUserPlayer?.username ?? 'VOUS')
+        : (_opponentPlayer?.username ?? 'ADVERSAIRE');
+  } else {
+    name = 'BLEU';
   }
+  
+  // Tronquer le nom si plus de 10 caractères
+  if (name.length > 11) {
+    return name.substring(0, 11) + "..";
+  }
+  return name;
+}
 
-  String get _redPlayerName {
-    if (widget.isAgainstAI) {
-      return 'IA ${widget.aiDifficulty.toString().split('.').last.toUpperCase()}';
-    } else if (_isOnlineGame) {
-      return _myPlayerColor == 'rouge' 
-          ? (_currentUserPlayer?.username ?? 'VOUS')
-          : (_opponentPlayer?.username ?? 'ADVERSAIRE');
-    } else {
-      return 'ROUGE';
-    }
+String get _redPlayerName {
+  String name;
+  if (widget.isAgainstAI) {
+    name = 'IA ${widget.aiDifficulty.toString().split('.').last.toUpperCase()}';
+  } else if (_isOnlineGame) {
+    name = _myPlayerColor == 'rouge' 
+        ? (_currentUserPlayer?.username ?? 'VOUS')
+        : (_opponentPlayer?.username ?? 'ADVERSAIRE');
+  } else {
+    name = 'ROUGE';
   }
+  
+  // Tronquer le nom si plus de 10 caractères
+  if (name.length > 11) {
+    return name.substring(0, 11) + "..";
+  }
+  return name;
+}
 
   @override
   void initState() {
@@ -103,6 +136,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
     _initializeGameData();
     _initializeGame();
+    _checkUserStatus();
     
     _scoreAnimationController = AnimationController(
       vsync: this,
@@ -139,16 +173,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
     
-  void _initializeGameData() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
-    }
+void _initializeGameData() async {
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null) {
+    _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
+  }
 
-    if (widget.existingGame != null && !widget.isAgainstAI) {
-      _isOnlineGame = true;
-      _gameId = widget.existingGame!.id;
-      
+  if (widget.existingGame != null && !widget.isAgainstAI) {
+    _isOnlineGame = true;
+    _gameId = widget.existingGame!.id;
+    
+    // Vérifier si l'utilisateur est un joueur ou spectateur
+    final isPlayer = widget.existingGame!.players.contains(currentUser!.uid);
+    _isSpectator = !isPlayer;
+    
+    if (isPlayer) {
+      // Logique existante pour les joueurs
       if (widget.existingGame!.player1Id == _currentUserId) {
         _myPlayerColor = 'bleu';
       } else if (widget.existingGame!.player2Id == _currentUserId) {
@@ -162,15 +202,30 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (opponentId != null) {
         _opponentPlayer = await GameService.getPlayer(opponentId);
       }
+    } else {
+      // Logique pour les spectateurs
+      print('👀 Initialisation en mode spectateur');
       
-      _startListeningToGameUpdates();
-      _loadSpectators();
-    } else if (widget.opponentId != null) {
-      _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
+      // 🎯 IMPORTANT : Les spectateurs doivent aussi charger les infos des joueurs
+      if (widget.existingGame!.player1Id != null) {
+        _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
+      }
+      if (widget.existingGame!.player2Id != null && _opponentPlayer == null) {
+        _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
+      }
+      
+      _joinAsSpectator();
     }
-
-    setState(() {});
+    
+    // 🎯 TOUS LES UTILISATEURS (JOUEURS ET SPECTATEURS) DOIVENT ÉCOUTER LES MISE À JOUR
+    _startListeningToGameUpdates();
+    _loadSpectators();
+  } else if (widget.opponentId != null) {
+    _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
   }
+
+  setState(() {});
+}
 
   void _initializeTimers() {
     if (_timerInitialized) return;
@@ -321,7 +376,10 @@ void _handleMissedTurnFromFirestore(String playerId) {
     _scoreAnimationController.dispose();
     _radarAnimationController.dispose();
     _gameStreamSubscription?.cancel();
-    _leaveAsSpectator();
+      // 🚪 QUITTER EN TANT QUE SPECTATEUR SEULEMENT SI ON ÉTAIT SPECTATEUR
+    if (_isSpectator && _gameId != null && _currentUserId != null) {
+      _leaveAsSpectator();
+    }
     super.dispose();
   }
 
@@ -604,6 +662,17 @@ void _endGameByTime() async {
   GameStartService().exitGame();
 }
   void _onPointTap(int x, int y) async {
+      // 🚫 BLOQUER L'INTERACTION POUR LES SPECTATEURS
+    if (_isSpectator) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Les spectateurs ne peuvent pas jouer'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     if (isGameFinished) return;
     
     if (_isOnlineGame && !_isMyTurn) {
@@ -930,17 +999,11 @@ Widget _buildResultModal() {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(15),
                           onTap: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const NavigationScreen(),
-                              ),
-                            );
                             Navigator.of(context).pop();
                           },
                           child: Center(
                             child: Text(
-                              'REVENIR À L\'ACCUEIL',
+                              'Fermer',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -1154,7 +1217,19 @@ Widget _buildResultModal() {
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   icon: Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    // 🎯 ACTION DIFFÉRENTE POUR LES SPECTATEURS
+                    if (_isSpectator) {
+                      _leaveAsSpectatorAndExit();
+                    } else {
+                      Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const NavigationScreen(),
+                              ),
+                            );
+                    }
+                  },
                 ),
               ),
               SizedBox(width: 12),
@@ -1231,32 +1306,55 @@ Widget _buildResultModal() {
     );
   }
 
-  Widget _buildGameMenuDropdown() {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
-      ),
-      child: PopupMenuButton<String>(
-        padding: EdgeInsets.zero,
-        icon: Icon(Icons.more_vert, color: Colors.white, size: 20),
-        color: Color(0xFF2d0052),
-        surfaceTintColor: Color(0xFF2d0052),
-        shadowColor: Color(0xFF9c27b0).withOpacity(0.5),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(5),
-          side: BorderSide(color: Color(0xFF9c27b0), width: 1),
-        ),
-        onSelected: (String value) {
-          if (value == 'forfeit') {
-            _showForfeitConfirmation();
-          } else if (value == 'new_game') {
-            _showNewGameConfirmation();
-          }
-        },
-        itemBuilder: (BuildContext context) => [
+  void _leaveAsSpectatorAndExit() {
+  _leaveAsSpectator();
+  Navigator.pop(context);
+}
+
+Widget _buildGameMenuDropdown() {
+  return Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
+    ),
+    child: PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      icon: Icon(Icons.more_vert, color: Colors.white, size: 20),
+      color: Color(0xFF2d0052),
+      onSelected: (String value) {
+        if (value == 'forfeit' && !_isSpectator) {
+          _showForfeitConfirmation();
+        } else if (value == 'new_game' && !_isOnlineGame) {
+          _showNewGameConfirmation();
+        } else if (value == 'leave_spectator' && _isSpectator) {
+          _leaveAsSpectatorAndExit();
+        }
+      },
+      itemBuilder: (BuildContext context) => [
+        // 🎯 OPTION POUR QUITTER EN TANT QUE SPECTATEUR
+        if (_isSpectator)
+          PopupMenuItem<String>(
+            value: 'leave_spectator',
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]),
+                  ),
+                  child: Icon(Icons.exit_to_app, color: Colors.white, size: 18),
+                ),
+                SizedBox(width: 12),
+                Text('Quitter l\'observation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        // OPTIONS POUR LES JOUEURS SEULEMENT
+        if (!_isSpectator)
           PopupMenuItem<String>(
             value: 'forfeit',
             child: Row(
@@ -1275,31 +1373,31 @@ Widget _buildResultModal() {
               ],
             ),
           ),
-          if (!_isOnlineGame)
-            PopupMenuItem<String>(
-              value: 'new_game',
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(colors: [Color(0xFF00d4ff), Color(0xFF0099cc)]),
-                    ),
-                    child: Icon(Icons.refresh, color: Colors.white, size: 18),
+        if (!_isOnlineGame && !_isSpectator)
+          PopupMenuItem<String>(
+            value: 'new_game',
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFF00d4ff), Color(0xFF0099cc)]),
                   ),
-                  SizedBox(width: 12),
-                  Text('Nouvelle partie', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                ],
-              ),
+                  child: Icon(Icons.refresh, color: Colors.white, size: 18),
+                ),
+                SizedBox(width: 12),
+                Text('Nouvelle partie', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ],
             ),
-        ],
-      ),
-    );
-  }
-
+          ),
+      ],
+    ),
+  );
+}
   void _showForfeitConfirmation() {
+     if (_isSpectator) return; // 🚫 Bloqué pour les spectateurs
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1329,6 +1427,7 @@ Widget _buildResultModal() {
   }
 
   void _showNewGameConfirmation() {
+    if (_isSpectator) return; // 🚫 Bloqué pour les spectateurs
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1596,21 +1695,6 @@ void _endGameByForfeit() async {
                                   ),
                                   child: Center(
                                     child: Text(spectator.displayAvatar, style: TextStyle(fontSize: 16)),
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                SizedBox(
-                                  width: 50,
-                                  child: Text(
-                                    spectator.username,
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
@@ -1889,4 +1973,3 @@ class GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

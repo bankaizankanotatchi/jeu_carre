@@ -7,6 +7,7 @@ import 'package:jeu_carre/screens/login_screen.dart';
 import 'package:jeu_carre/screens/navigation_screen.dart';
 import 'package:jeu_carre/screens/first_launch_rules_screen.dart';
 import 'package:jeu_carre/screens/signup_screen.dart';
+import 'package:jeu_carre/services/feedback_notification_service.dart';
 import 'package:jeu_carre/services/match_request_notification.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
 import 'package:jeu_carre/services/presence_service.dart';
@@ -58,7 +59,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
   final PresenceService _presenceService = PresenceService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final MatchNotificationService _matchNotificationService = MatchNotificationService();
-  final GameStartService _gameStartService = GameStartService(); // 🔥 NOUVEAU SERVICE
+  final FeedbackNotificationService _feedbackNotificationService = FeedbackNotificationService(); 
+  final GameStartService _gameStartService = GameStartService(); 
 
   @override
   void initState() {
@@ -74,7 +76,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _updatePresenceStatus(false);
     _matchNotificationService.dispose();
-    _gameStartService.dispose(); // 🔥 NETTOYER LE NOUVEAU SERVICE
+    _gameStartService.dispose();
+    _feedbackNotificationService.dispose(); 
     super.dispose();
   }
 
@@ -84,7 +87,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         _updatePresenceStatus(true);
         _matchNotificationService.restart();
-        _gameStartService.restart(); // 🔥 REDÉMARRER LE SERVICE
+        _gameStartService.restart();
+        _feedbackNotificationService.restart(); 
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
@@ -92,7 +96,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
       case AppLifecycleState.hidden:
         _updatePresenceStatus(false);
         _matchNotificationService.stop();
-        _gameStartService.stop(); // 🔥 ARRÊTER LE SERVICE
+        _gameStartService.stop();
+        _feedbackNotificationService.stop();
         break;
     }
   }
@@ -130,7 +135,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _matchNotificationService.initialize(context);
-       _gameStartService.initialize(context); // 🔥 INITIALISER LE SERVICE
+       _gameStartService.initialize(context);
+       _feedbackNotificationService.initialize(context); 
       }
     });
     

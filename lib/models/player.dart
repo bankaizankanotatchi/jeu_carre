@@ -155,6 +155,40 @@ class Player {
       isActive: isActive ?? this.isActive,
   ) ;
   }
+  // Créer un joueur à partir d'infos de base pour les notifications de messages
+factory Player.fromBasicInfo({
+  required String id,
+  required String username,
+  String? avatarUrl,
+  String defaultEmoji = '👤',
+  String? email,
+  required createdAt,
+}) {
+  final now = DateTime.now();
+  return Player(
+    id: id,
+    username: username,
+    email: email ?? '',
+    avatarUrl: avatarUrl,
+    defaultEmoji: defaultEmoji,
+    role: UserRole.player,
+    totalPoints: 0,
+    gamesPlayed: 0,
+    gamesWon: 0,
+    gamesLost: 0,
+    gamesDraw: 0,
+    createdAt: createdAt,
+    lastLoginAt: now,
+    stats: UserStats(),
+    isActive: true,
+    isOnline: false,
+    inGame: false,
+    currentGameId: null,
+    achievements: [],
+    statusMessage: '',
+  );
+}
+
 }
 
 // ============================================
@@ -242,4 +276,7 @@ class UserStats {
       feedbacksLiked: feedbacksLiked ?? this.feedbacksLiked,
     );
   }
+
+  
 }
+

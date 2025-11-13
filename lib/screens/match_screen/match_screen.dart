@@ -14,120 +14,34 @@ class MatchScreen extends StatefulWidget {
 
 class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Streams pour les données en temps réel
   Stream<List<Game>>? _myActiveGamesStream;
   Stream<List<Game>>? _allActiveGamesStream;
-  // Stream<List<MatchRequest>>? _receivedRequestsStream;
-  // Stream<List<MatchRequest>>? _sentRequestsStream;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _initializeStreams();
   }
 
-void _initializeStreams() {
-  final currentUserId = _auth.currentUser?.uid;
-  if (currentUserId != null) {
-    try {
+  void _initializeStreams() {
+    final currentUserId = _auth.currentUser?.uid;
+    
+    // Initialiser les streams
+    _allActiveGamesStream = GameService.getAllActiveGames();
+    
+    if (currentUserId != null) {
       _myActiveGamesStream = GameService.getMyActiveGames(currentUserId);
-      _allActiveGamesStream = GameService.getAllActiveGames();
-      // _receivedRequestsStream = GameService.getReceivedMatchRequests(currentUserId);
-      // _sentRequestsStream = GameService.getSentMatchRequests(currentUserId);
-    } catch (e) {
-      print('Erreur initialisation streams: $e');
     }
   }
-}
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
-
-  // ============================================================
-  // FONCTIONS DE GESTION DES DEMANDES
-  // ============================================================
-
-// void _acceptMatchRequest(MatchRequest request) async {
-//   try {
-//     final currentUserId = _auth.currentUser?.uid;
-//     if (currentUserId == null) return;
-
-//     await GameService.acceptMatchRequest(request.id, currentUserId);
-    
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Défi accepté !'),
-//         backgroundColor: Colors.green,
-//       ),
-//     );
-//   } catch (e) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Erreur: ${e.toString()}'),
-//         backgroundColor: Colors.red,
-//       ),
-//     );
-//   }
-// }
-
-// void _rejectMatchRequest(MatchRequest request) async {
-//   try {
-//     final currentUserId = _auth.currentUser?.uid;
-//     if (currentUserId == null) return;
-
-//     await GameService.rejectMatchRequest(request.id, currentUserId);
-    
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Défi refusé'),
-//         backgroundColor: Colors.orange,
-//       ),
-//     );
-//   } catch (e) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Erreur: ${e.toString()}'),
-//         backgroundColor: Colors.red,
-//       ),
-//     );
-//   }
-// }
-
-// void _cancelMatchRequest(MatchRequest request) async {
-//   try {
-//     final currentUserId = _auth.currentUser?.uid;
-//     if (currentUserId == null) return;
-
-//     await GameService.cancelMatchRequest(request.id, currentUserId);
-    
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Demande annulée'),
-//         backgroundColor: Colors.blue,
-//       ),
-//     );
-//   } catch (e) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text('Erreur: ${e.toString()}'),
-//         backgroundColor: Colors.red,
-//       ),
-//     );
-//   }
-// }
-
-
-//   void _createNewChallenge(String opponentId) {
-//     // Navigation vers l'écran de défi
-//     // TODO: Implémenter la navigation
-//   }
 
   void _joinAsSpectator(Game game) async {
     try {
@@ -141,6 +55,20 @@ void _initializeStreams() {
             backgroundColor: Colors.green,
           ),
         );
+
+              // 🎯 NAVIGUER VERS LE GAME SCREEN COMME SPECTATEUR
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GameScreen(
+            gridSize: game.gridSize,
+            isAgainstAI: game.isAgainstAI,
+            gameDuration: game.gameDuration,
+            reflexionTime: game.reflexionTime,
+            existingGame: game, // Passer la partie existante
+          ),
+        ),
+      );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -161,7 +89,7 @@ void _initializeStreams() {
           isAgainstAI: game.isAgainstAI,
           gameDuration: game.gameDuration,
           reflexionTime: game.reflexionTime,
-          existingGame: game, // Passer la partie existante
+          existingGame: game,
         ),
       ),
     );
@@ -212,356 +140,23 @@ void _initializeStreams() {
     );
   }
 
-  // Widget _buildMatchRequestCard(MatchRequest request, Player? opponent) {
-  //   final isExpired = GameService.isMatchRequestExpired(request);
-  //   final isRejected = request.status == MatchRequestStatus.declined;
-  //   final isPending = request.status == MatchRequestStatus.pending && !isExpired;
-  //   final isMyRequest = request.fromUserId == _auth.currentUser?.uid;
-    
-  //   Color statusColor;
-  //   String statusText;
-  //   IconData statusIcon;
-
-  //   if (isExpired) {
-  //     statusColor = Color(0xFF666666);
-  //     statusText = 'EXPIRÉE';
-  //     statusIcon = Icons.timer_off;
-  //   } else if (isRejected) {
-  //     statusColor = Color(0xFFff006e);
-  //     statusText = 'REFUSÉE';
-  //     statusIcon = Icons.cancel;
-  //   } else if (request.status == MatchRequestStatus.accepted) {
-  //     statusColor = Color(0xFF00d4ff);
-  //     statusText = 'ACCEPTÉE';
-  //     statusIcon = Icons.check_circle;
-  //   } else {
-  //     statusColor = Color(0xFFFFD700);
-  //     statusText = 'EN ATTENTE';
-  //     statusIcon = Icons.schedule;
-  //   }
-
-  //   final opponentName = opponent?.username ?? 'Joueur inconnu';
-  //   final opponentAvatar = opponent?.displayAvatar ?? '👤';
-
-  //   return Container(
-  //     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-  //     decoration: BoxDecoration(
-  //       color: Color(0xFF1a0033),
-  //       borderRadius: BorderRadius.circular(12),
-  //       border: Border.all(
-  //         color: statusColor.withOpacity(0.5),
-  //         width: 2,
-  //       ),
-  //     ),
-  //     child: Material(
-  //       color: Colors.transparent,
-  //       child: InkWell(
-  //         borderRadius: BorderRadius.circular(12),
-  //         onTap: () {
-  //           // Voir les détails de la demande
-  //         },
-  //         child: Padding(
-  //           padding: EdgeInsets.all(16),
-  //           child: Column(
-  //             children: [
-  //               Row(
-  //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                 children: [
-  //                   Row(
-  //                     children: [
-  //                       Container(
-  //                         width: 50,
-  //                         height: 50,
-  //                         decoration: BoxDecoration(
-  //                           shape: BoxShape.circle,
-  //                           gradient: LinearGradient(
-  //                             colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-  //                           ),
-  //                         ),
-  //                         child: Center(
-  //                           child: Text(
-  //                             opponentAvatar,
-  //                             style: TextStyle(fontSize: 20),
-  //                           ),
-  //                         ),
-  //                       ),
-  //                       SizedBox(width: 12),
-  //                       Column(
-  //                         crossAxisAlignment: CrossAxisAlignment.start,
-  //                         children: [
-  //                           Text(
-  //                             opponentName,
-  //                             style: TextStyle(
-  //                               color: Colors.white,
-  //                               fontSize: 16,
-  //                               fontWeight: FontWeight.w700,
-  //                             ),
-  //                           ),
-  //                           Text(
-  //                             isMyRequest ? 'Vous avez défié' : 'Vous a défié',
-  //                             style: TextStyle(
-  //                               color: Colors.white.withOpacity(0.6),
-  //                               fontSize: 12,
-  //                             ),
-  //                           ),
-  //                         ],
-  //                       ),
-  //                     ],
-  //                   ),
-  //                   Container(
-  //                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  //                     decoration: BoxDecoration(
-  //                       color: statusColor.withOpacity(0.2),
-  //                       borderRadius: BorderRadius.circular(12),
-  //                       border: Border.all(color: statusColor),
-  //                     ),
-  //                     child: Row(
-  //                       children: [
-  //                         Icon(statusIcon, color: statusColor, size: 14),
-  //                         SizedBox(width: 6),
-  //                         Text(
-  //                           statusText,
-  //                           style: TextStyle(
-  //                             color: statusColor,
-  //                             fontSize: 10,
-  //                             fontWeight: FontWeight.w900,
-  //                             letterSpacing: 1,
-  //                           ),
-  //                         ),
-  //                       ],
-  //                     ),
-  //                   ),
-  //                 ],
-  //               ),
-                
-  //               SizedBox(height: 16),
-                
-  //               Container(
-  //                 padding: EdgeInsets.all(12),
-  //                 decoration: BoxDecoration(
-  //                   color: Color(0xFF2d0052),
-  //                   borderRadius: BorderRadius.circular(8),
-  //                 ),
-  //                 child: Column(
-  //                   children: [
-  //                     Row(
-  //                       mainAxisAlignment: MainAxisAlignment.spaceAround,
-  //                       children: [
-  //                         _buildConfigItem('Grille', '${request.gridSize}×${request.gridSize}', Icons.grid_on),
-  //                         _buildConfigItem('Match', '${request.gameDuration ~/ 60} min', Icons.timer),
-  //                         _buildConfigItem('Tour', '${request.reflexionTime}s', Icons.hourglass_empty),
-  //                       ],
-  //                     ),
-  //                     SizedBox(height: 8),
-  //                     if (isPending && !isMyRequest)
-  //                       Text(
-  //                         'Temps restant: ${_formatTimeRemaining(request.createdAt)}',
-  //                         style: TextStyle(
-  //                           color: Color(0xFFFFD700),
-  //                           fontSize: 12,
-  //                           fontWeight: FontWeight.w600,
-  //                         ),
-  //                       ),
-  //                   ],
-  //                 ),
-  //               ),
-                
-  //               SizedBox(height: 12),
-                
-  //               if (isPending && !isMyRequest)
-  //                 Row(
-  //                   children: [
-  //                     Expanded(
-  //                       child: Container(
-  //                         height: 40,
-  //                         decoration: BoxDecoration(
-  //                           gradient: LinearGradient(
-  //                             colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-  //                           ),
-  //                           borderRadius: BorderRadius.circular(8),
-  //                         ),
-  //                         child: Material(
-  //                           color: Colors.transparent,
-  //                           child: InkWell(
-  //                             borderRadius: BorderRadius.circular(8),
-  //                             onTap: () => _acceptMatchRequest(request),
-  //                             child: Center(
-  //                               child: Row(
-  //                                 mainAxisAlignment: MainAxisAlignment.center,
-  //                                 children: [
-  //                                   Icon(Icons.check, color: Colors.white, size: 16),
-  //                                   SizedBox(width: 6),
-  //                                   Text(
-  //                                     'ACCEPTER',
-  //                                     style: TextStyle(
-  //                                       color: Colors.white,
-  //                                       fontSize: 12,
-  //                                       fontWeight: FontWeight.w900,
-  //                                     ),
-  //                                   ),
-  //                                 ],
-  //                               ),
-  //                             ),
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ),
-  //                     SizedBox(width: 8),
-  //                     Expanded(
-  //                       child: Container(
-  //                         height: 40,
-  //                         decoration: BoxDecoration(
-  //                           color: Color(0xFF1a0033),
-  //                           borderRadius: BorderRadius.circular(8),
-  //                           border: Border.all(color: Color(0xFFff006e)),
-  //                         ),
-  //                         child: Material(
-  //                           color: Colors.transparent,
-  //                           child: InkWell(
-  //                             borderRadius: BorderRadius.circular(8),
-  //                             onTap: () => _rejectMatchRequest(request),
-  //                             child: Center(
-  //                               child: Row(
-  //                                 mainAxisAlignment: MainAxisAlignment.center,
-  //                                 children: [
-  //                                   Icon(Icons.close, color: Color(0xFFff006e), size: 16),
-  //                                   SizedBox(width: 6),
-  //                                   Text(
-  //                                     'REFUSER',
-  //                                     style: TextStyle(
-  //                                       color: Color(0xFFff006e),
-  //                                       fontSize: 12,
-  //                                       fontWeight: FontWeight.w900,
-  //                                     ),
-  //                                   ),
-  //                                 ],
-  //                               ),
-  //                             ),
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ),
-  //                   ],
-  //                 )
-  //               else if (isPending && isMyRequest)
-  //                 Container(
-  //                   width: double.infinity,
-  //                   height: 40,
-  //                   decoration: BoxDecoration(
-  //                     color: Color(0xFF1a0033),
-  //                     borderRadius: BorderRadius.circular(8),
-  //                     border: Border.all(color: Color(0xFFFFD700)),
-  //                   ),
-  //                   child: Material(
-  //                     color: Colors.transparent,
-  //                     child: InkWell(
-  //                       borderRadius: BorderRadius.circular(8),
-  //                       onTap: () => _cancelMatchRequest(request),
-  //                       child: Center(
-  //                         child: Row(
-  //                           mainAxisAlignment: MainAxisAlignment.center,
-  //                           children: [
-  //                             Icon(Icons.cancel, color: Color(0xFFFFD700), size: 16),
-  //                             SizedBox(width: 6),
-  //                             Text(
-  //                               'ANNULER LA DEMANDE',
-  //                               style: TextStyle(
-  //                                 color: Color(0xFFFFD700),
-  //                                 fontSize: 12,
-  //                                 fontWeight: FontWeight.w900,
-  //                               ),
-  //                             ),
-  //                           ],
-  //                         ),
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 )
-  //               else if (isExpired || isRejected)
-  //                 Container(
-  //                   width: double.infinity,
-  //                   height: 40,
-  //                   decoration: BoxDecoration(
-  //                     color: Color(0xFF1a0033),
-  //                     borderRadius: BorderRadius.circular(8),
-  //                     border: Border.all(color: statusColor),
-  //                   ),
-  //                   child: Material(
-  //                     color: Colors.transparent,
-  //                     child: InkWell(
-  //                       borderRadius: BorderRadius.circular(8),
-  //                       onTap: () => _createNewChallenge(request.fromUserId),
-  //                       child: Center(
-  //                         child: Text(
-  //                           'REDÉFIER',
-  //                           style: TextStyle(
-  //                             color: statusColor,
-  //                             fontSize: 12,
-  //                             fontWeight: FontWeight.w900,
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //             ],
-  //           ),
-  //         ),
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildConfigItem(String title, String value, IconData icon) {
-  //   return Column(
-  //     children: [
-  //       Icon(icon, color: Color(0xFF00d4ff), size: 16),
-  //       SizedBox(height: 4),
-  //       Text(
-  //         value,
-  //         style: TextStyle(
-  //           color: Colors.white,
-  //           fontSize: 12,
-  //           fontWeight: FontWeight.w700,
-  //         ),
-  //       ),
-  //       Text(
-  //         title,
-  //         style: TextStyle(
-  //           color: Colors.white.withOpacity(0.6),
-  //           fontSize: 8,
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
-
-  // String _formatTimeRemaining(DateTime createdAt) {
-  //   final difference = DateTime.now().difference(createdAt);
-  //   final hoursLeft = 24 - difference.inHours;
-  //   final minutesLeft = 60 - difference.inMinutes % 60;
-    
-  //   if (hoursLeft > 0) {
-  //     return '${hoursLeft}h ${minutesLeft}m';
-  //   } else {
-  //     return '${minutesLeft}m';
-  //   }
-  // }
-  
   String _getOpponentId(Game game, String currentUserId) {
-  try {
-    return game.players.firstWhere(
-      (p) => p != currentUserId,
-      orElse: () => game.players.isNotEmpty ? game.players.first : '',
-    );
-  } catch (e) {
-    return game.players.isNotEmpty ? game.players.first : '';
+    try {
+      return game.players.firstWhere(
+        (p) => p != currentUserId,
+        orElse: () => game.players.isNotEmpty ? game.players.first : '',
+      );
+    } catch (e) {
+      return game.players.isNotEmpty ? game.players.first : '';
+    }
   }
-}
+
   String _truncateName(String name) {
-    if (name.length <= 15) return name;
-    return '${name.substring(0, 14)}..';
+    if (name.length <= 10) return name;
+    return '${name.substring(0, 9)}..';
   }
+
+  // MÉTHODE _buildMyMatchCard QUI MANQUAIT
   Widget _buildMyMatchCard(Game game, Player? opponent) {
     final currentUserId = _auth.currentUser?.uid;
     final isMyTurn = game.currentPlayer == currentUserId;
@@ -795,21 +390,23 @@ void _initializeStreams() {
     );
   }
 
+  // VERSION ULTRA-SIMPLE POUR LES MATCHS PUBLICS
   Widget _buildPublicMatchCard(Game game) {
     final timeLeft = game.timeRemaining;
     final minutes = timeLeft ~/ 60;
     final seconds = timeLeft % 60;
-    
-    return FutureBuilder(
-      future: Future.wait([
-        GameService.getPlayer(game.player1Id ?? ''),
-        GameService.getPlayer(game.player2Id ?? ''),
-      ]),
-      builder: (context, AsyncSnapshot<List<Player?>> snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return _buildMatchSkeleton();
-        }
 
+    return FutureBuilder<List<Player?>>(
+      future: Future.wait([
+        if (game.player1Id != null && game.player1Id!.isNotEmpty)
+          GameService.getPlayer(game.player1Id!)
+        else Future.value(null),
+        if (game.player2Id != null && game.player2Id!.isNotEmpty)
+          GameService.getPlayer(game.player2Id!)
+        else Future.value(null),
+      ]),
+      builder: (context, snapshot) {
+        // Toujours afficher quelque chose, même en cas d'erreur
         final player1 = snapshot.data?[0];
         final player2 = snapshot.data?[1];
         final score1 = game.scores[game.player1Id] ?? 0;
@@ -831,54 +428,14 @@ void _initializeStreams() {
                 padding: EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    // En-tête avec les joueurs
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    player1?.displayAvatar ?? '👤',
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      player1?.username ?? 'Joueur 1',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      'Joueur 1',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.6),
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildPlayerInfo(
+                          player1, 
+                          'Joueur 1', 
+                          [Color(0xFF00d4ff), Color(0xFF0099cc)]
                         ),
                         
                         Container(
@@ -897,58 +454,18 @@ void _initializeStreams() {
                           ),
                         ),
                         
-                        Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      player2?.username ?? 'Joueur 2',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      'Joueur 2',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.6),
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [Color(0xFFe040fb), Color(0xFF9c27b0)],
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    player2?.displayAvatar ?? '👤',
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildPlayerInfo(
+                          player2, 
+                          'Joueur 2', 
+                          [Color(0xFFe040fb), Color(0xFF9c27b0)],
+                          isRight: true
                         ),
                       ],
                     ),
                     
                     SizedBox(height: 16),
                     
+                    // Section scores et temps
                     Container(
                       padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -958,26 +475,7 @@ void _initializeStreams() {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            children: [
-                              Text(
-                                '$score1',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                'SCORE',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                          _buildScoreSection(score1, 'SCORE'),
                           
                           Column(
                             children: [
@@ -995,12 +493,10 @@ void _initializeStreams() {
                                 decoration: BoxDecoration(
                                   color: Color(0xFF00d4ff).withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: Color(0xFF00d4ff),
-                                  ),
+                                  border: Border.all(color: Color(0xFF00d4ff)),
                                 ),
                                 child: Text(
-                                  'TOUR DE ${game.currentPlayer == game.player1Id ? player1?.username ?? 'J1' : player2?.username ?? 'J2'}',
+                                  'TOUR DE ${_getCurrentPlayerName(game, player1, player2)}',
                                   style: TextStyle(
                                     color: Color(0xFF00d4ff),
                                     fontSize: 8,
@@ -1011,32 +507,14 @@ void _initializeStreams() {
                             ],
                           ),
                           
-                          Column(
-                            children: [
-                              Text(
-                                '$score2',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                'SCORE',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                          _buildScoreSection(score2, 'SCORE'),
                         ],
                       ),
                     ),
                     
                     SizedBox(height: 12),
                     
+                    // Footer avec infos et bouton
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1107,46 +585,103 @@ void _initializeStreams() {
     );
   }
 
-  Widget _buildMatchSkeleton() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        borderRadius: BorderRadius.circular(12),
-      ),
+  Widget _buildPlayerInfo(Player? player, String defaultName, List<Color> colors, {bool isRight = false}) {
+    return Expanded(
       child: Row(
+        mainAxisAlignment: isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.grey[800],
+          if (!isRight) ...[
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: colors),
+              ),
+              child: Center(
+                child: Text(
+                  player?.displayAvatar ?? '👤',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
             ),
-          ),
-          SizedBox(width: 12),
+            SizedBox(width: 8),
+          ],
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 100,
-                  height: 16,
-                  color: Colors.grey[800],
+                Text(
+                  _truncateName(player?.username ?? defaultName),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: 4),
-                Container(
-                  width: 60,
-                  height: 12,
-                  color: Colors.grey[800],
+                Text(
+                  defaultName,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
           ),
+          if (isRight) ...[
+            SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: colors),
+              ),
+              child: Center(
+                child: Text(
+                  player?.displayAvatar ?? '👤',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildScoreSection(int score, String label) {
+    return Column(
+      children: [
+        Text(
+          '$score',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getCurrentPlayerName(Game game, Player? player1, Player? player2) {
+    if (game.currentPlayer == game.player1Id) {
+      return player1?.username ?? 'J1';
+    } else if (game.currentPlayer == game.player2Id) {
+      return player2?.username ?? 'J2';
+    }
+    return '?';
   }
 
   // ============================================================
@@ -1159,22 +694,19 @@ void _initializeStreams() {
       backgroundColor: Color(0xFF0a0015),
       body: Column(
         children: [
+          // Header
           Container(
             padding: EdgeInsets.fromLTRB(16, 50, 6, 1),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF1a0033),
-                  Color(0xFF2d0052),
-                ],
+                colors: [Color(0xFF1a0033), Color(0xFF2d0052)],
               ),
             ),
             child: Stack(
               children: [
                 ...List.generate(12, (index) => _buildAnimatedParticle(index)),
-                
                 Column(
                   children: [
                     Row(
@@ -1232,12 +764,11 @@ void _initializeStreams() {
             ),
           ),
           
+          // TabBar
           Container(
             decoration: BoxDecoration(
               color: Color(0xFF1a0033),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFF4a0080)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFF4a0080))),
             ),
             child: TabBar(
               controller: _tabController,
@@ -1251,17 +782,65 @@ void _initializeStreams() {
               ),
               indicatorWeight: 3,
               tabs: [
-                Tab(icon: Icon(Icons.person), text: 'MES MATCHS'),
                 Tab(icon: Icon(Icons.public), text: 'TOUS LES MATCHS'),
+                Tab(icon: Icon(Icons.person), text: 'MES MATCHS'),
               ],
             ),
           ),
           
+          // TabBarView
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                // TAB 1: MES MATCHS
+                // TAB 1: TOUS LES MATCHS - VERSION STABLE
+                StreamBuilder<List<Game>>(
+                  stream: _allActiveGamesStream,
+                  builder: (context, snapshot) {
+                    // DEBUG
+                    print('🎯 STREAM PUBLIC - ConnectionState: ${snapshot.connectionState}');
+                    print('🎯 STREAM PUBLIC - HasData: ${snapshot.hasData}');
+                    print('🎯 STREAM PUBLIC - HasError: ${snapshot.hasError}');
+                    
+                    if (snapshot.hasData) {
+                      final games = snapshot.data!;
+                      print('🎮 NOMBRE DE MATCHS PUBLICS: ${games.length}');
+                      
+                      for (var game in games) {
+                        print('➡️ Match ${game.id}: status=${game.status}, players=${game.players.length}');
+                      }
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return _buildLoadingState('Recherche de matchs publics...');
+                    }
+
+                    if (snapshot.hasError) {
+                      print('🚨 ERREUR STREAM PUBLIC: ${snapshot.error}');
+                      return _buildErrorState('Erreur de chargement des matchs');
+                    }
+
+                    final games = snapshot.data ?? [];
+
+                    if (games.isEmpty) {
+                      return _buildEmptyState(
+                        'AUCUN MATCH PUBLIC',
+                        'Les matchs en cours apparaîtront ici\nLancez une partie en mode "Public"',
+                        Icons.people,
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      itemCount: games.length,
+                      itemBuilder: (context, index) {
+                        return _buildPublicMatchCard(games[index]);
+                      },
+                    );
+                  },
+                ),
+              
+                // TAB 2: MES MATCHS
                 StreamBuilder<List<Game>>(
                   stream: _myActiveGamesStream,
                   builder: (context, snapshot) {
@@ -1294,46 +873,11 @@ void _initializeStreams() {
                         );
                         
                         return FutureBuilder<Player?>(
-                          future: GameService.getPlayer(opponentId),
+                          future: opponentId.isNotEmpty ? GameService.getPlayer(opponentId) : Future.value(null),
                           builder: (context, opponentSnapshot) {
-                            return _buildMyMatchCard(
-                              game, 
-                              opponentSnapshot.data
-                            );
+                            return _buildMyMatchCard(game, opponentSnapshot.data);
                           },
                         );
-                      },
-                    );
-                  },
-                ),
-
-                // TAB 2: TOUS LES MATCHS
-                StreamBuilder<List<Game>>(
-                  stream: _allActiveGamesStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildLoadingState('Chargement des matchs publics...');
-                    }
-
-                    if (snapshot.hasError) {
-                      return _buildErrorState('Erreur de chargement');
-                    }
-
-                    final games = snapshot.data ?? [];
-
-                    if (games.isEmpty) {
-                      return _buildEmptyState(
-                        'AUCUN MATCH PUBLIC',
-                        'Soyez le premier à lancer un match public !',
-                        Icons.people,
-                      );
-                    }
-
-                    return ListView.builder(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      itemCount: games.length,
-                      itemBuilder: (context, index) {
-                        return _buildPublicMatchCard(games[index]);
                       },
                     );
                   },
@@ -1351,9 +895,7 @@ void _initializeStreams() {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
-            color: Color(0xFF00d4ff),
-          ),
+          CircularProgressIndicator(color: Color(0xFF00d4ff)),
           SizedBox(height: 16),
           Text(
             message,
@@ -1376,10 +918,7 @@ void _initializeStreams() {
           SizedBox(height: 16),
           Text(
             error,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.white, fontSize: 16),
           ),
           SizedBox(height: 16),
           ElevatedButton(
@@ -1401,40 +940,15 @@ void _initializeStreams() {
             height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF2d0052),
-                  Color(0xFF4a0080),
-                ],
-              ),
-              border: Border.all(
-                color: Color(0xFF9c27b0),
-                width: 2,
-              ),
+              gradient: LinearGradient(colors: [Color(0xFF2d0052), Color(0xFF4a0080)]),
+              border: Border.all(color: Color(0xFF9c27b0), width: 2),
             ),
-            child: Icon(
-              icon,
-              color: Color(0xFF00d4ff),
-              size: 40,
-            ),
+            child: Icon(icon, color: Color(0xFF00d4ff), size: 40),
           ),
           SizedBox(height: 20),
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          Text(title, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
           SizedBox(height: 12),
-          Text(
-            message,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-            ),
-          ),
+          Text(message, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14)),
         ],
       ),
     );

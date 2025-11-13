@@ -475,7 +475,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
         ),
         
         // Indicateurs de page
-        Container(
+        SizedBox(
           height: 50,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -745,9 +745,9 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                             onPressed: () => Navigator.pop(context),
                           ),
                         ),
-                        SizedBox(width: 16),
+                        
                         Container(
-                          padding: EdgeInsets.fromLTRB(2, 25, 6, 10),
+                           margin: EdgeInsets.fromLTRB(0, 65, 16, 10),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -773,7 +773,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
                         ),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 6),
                     
                     // TabBar
                   Container(
