@@ -524,9 +524,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 30),
                 
                 // Bouton Google
-                _buildGoogleLoginButton(),
+                // _buildGoogleLoginButton(),
                 
-                const SizedBox(height: 20),
+                // const SizedBox(height: 20),
                 
                 // Séparateur
                 Row(
@@ -547,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        'OU',
+                        'Shikaku',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.6),
                           fontWeight: FontWeight.w700,

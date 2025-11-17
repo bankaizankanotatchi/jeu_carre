@@ -1137,4 +1137,76 @@ static Future<void> updateGameScores(String gameId, Map<String, int> newScores) 
     throw Exception('Erreur mise à jour scores: $e');
   }
 }
+
+// ============================================================
+// GESTION DES MESSAGES RAPIDES - SYNCHRONISATION FIREBASE
+// ============================================================
+
+/// Envoyer un message rapide
+static Future<void> sendQuickMessage(String gameId, String message, String senderId, String senderName) async {
+  try {
+    final messagesRef = gamesCollection.doc(gameId).collection('quickMessages').doc();
+    
+    await messagesRef.set({
+      'text': message,
+      'senderId': senderId,
+      'senderName': senderName,
+      'timestamp': FieldValue.serverTimestamp(),
+      'expiresAt': DateTime.now().add(Duration(seconds: 10)).millisecondsSinceEpoch, // Auto-nettoyage
+    });
+    
+    print('💬 Message rapide envoyé: "$message" par $senderName');
+  } catch (e) {
+    print('❌ Erreur envoi message rapide: $e');
+  }
+}
+
+/// Écouter les messages rapides d'une partie
+static Stream<Map<String, dynamic>> getQuickMessages(String gameId) {
+  return gamesCollection
+      .doc(gameId)
+      .collection('quickMessages')
+      .orderBy('timestamp', descending: true)
+      .limit(1) // Seulement le dernier message
+      .snapshots()
+      .map((snapshot) {
+        if (snapshot.docs.isNotEmpty) {
+          final doc = snapshot.docs.first;
+          final data = doc.data();
+          
+          // Vérifier si le message n'est pas expiré
+          final expiresAt = data['expiresAt'] as int?;
+          if (expiresAt != null && DateTime.now().millisecondsSinceEpoch > expiresAt) {
+            return {};
+          }
+          
+          return data;
+        }
+        return {};
+      });
+}
+
+/// Nettoyer les messages expirés (optionnel - pour maintenance)
+static Future<void> cleanupExpiredMessages(String gameId) async {
+  try {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final messages = await gamesCollection
+        .doc(gameId)
+        .collection('quickMessages')
+        .where('expiresAt', isLessThan: now)
+        .get();
+    
+    final batch = _firestore.batch();
+    for (final doc in messages.docs) {
+      batch.delete(doc.reference);
+    }
+    
+    if (messages.docs.isNotEmpty) {
+      await batch.commit();
+      print('🧹 ${messages.docs.length} messages expirés nettoyés');
+    }
+  } catch (e) {
+    print('⚠️ Erreur nettoyage messages: $e');
+  }
+}
 }

@@ -23,6 +23,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   // Stream pour les messages
   Stream<List<Message>>? _messagesStream;
+  
+  // Cache local pour les interactions (optimisation likes/dislikes)
+  final Map<String, Map<InteractionType, bool>> _localInteractions = {};
+  final Map<String, int> _localLikesCount = {};
+  final Map<String, int> _localDislikesCount = {};
 
   @override
   void initState() {
@@ -229,26 +234,158 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
   }
 
-  Future<void> _likeMessage(String messageId) async {
+  Future<void> _likeMessage(String messageId, int currentLikes, int currentDislikes) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userInteractionKey = '${currentUser.uid}_$messageId';
+    final isCurrentlyLiked = _localInteractions[userInteractionKey]?[InteractionType.like] ?? false;
+    final isCurrentlyDisliked = _localInteractions[userInteractionKey]?[InteractionType.dislike] ?? false;
+
+    // Mise à jour immédiate de l'UI
+    setState(() {
+      // Initialiser les compteurs locaux si nécessaire
+      if (!_localLikesCount.containsKey(messageId)) {
+        _localLikesCount[messageId] = currentLikes;
+      }
+      if (!_localDislikesCount.containsKey(messageId)) {
+        _localDislikesCount[messageId] = currentDislikes;
+      }
+
+      // Gérer la logique des interactions
+      if (isCurrentlyLiked) {
+        // Retirer le like
+        _localLikesCount[messageId] = _localLikesCount[messageId]! - 1;
+        _localInteractions[userInteractionKey] = {
+          InteractionType.like: false,
+          InteractionType.dislike: isCurrentlyDisliked,
+        };
+      } else {
+        // Ajouter le like
+        _localLikesCount[messageId] = _localLikesCount[messageId]! + 1;
+        
+        // Retirer le dislike si présent
+        if (isCurrentlyDisliked) {
+          _localDislikesCount[messageId] = _localDislikesCount[messageId]! - 1;
+        }
+        
+        _localInteractions[userInteractionKey] = {
+          InteractionType.like: true,
+          InteractionType.dislike: false,
+        };
+      }
+    });
+
+    // Appel Firebase en arrière-plan
     try {
       await FeedbackService.toggleInteraction(
         messageId: messageId,
         type: InteractionType.like,
       );
     } catch (e) {
+      // En cas d'erreur, on revert les changements locaux
+      setState(() {
+        if (isCurrentlyLiked) {
+          _localLikesCount[messageId] = currentLikes;
+        } else {
+          _localLikesCount[messageId] = currentLikes;
+          if (isCurrentlyDisliked) {
+            _localDislikesCount[messageId] = currentDislikes;
+          }
+        }
+        _localInteractions.remove(userInteractionKey);
+      });
       _showError('Erreur like: $e');
     }
   }
 
-  Future<void> _dislikeMessage(String messageId) async {
+  Future<void> _dislikeMessage(String messageId, int currentLikes, int currentDislikes) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userInteractionKey = '${currentUser.uid}_$messageId';
+    final isCurrentlyLiked = _localInteractions[userInteractionKey]?[InteractionType.like] ?? false;
+    final isCurrentlyDisliked = _localInteractions[userInteractionKey]?[InteractionType.dislike] ?? false;
+
+    // Mise à jour immédiate de l'UI
+    setState(() {
+      // Initialiser les compteurs locaux si nécessaire
+      if (!_localLikesCount.containsKey(messageId)) {
+        _localLikesCount[messageId] = currentLikes;
+      }
+      if (!_localDislikesCount.containsKey(messageId)) {
+        _localDislikesCount[messageId] = currentDislikes;
+      }
+
+      // Gérer la logique des interactions
+      if (isCurrentlyDisliked) {
+        // Retirer le dislike
+        _localDislikesCount[messageId] = _localDislikesCount[messageId]! - 1;
+        _localInteractions[userInteractionKey] = {
+          InteractionType.like: isCurrentlyLiked,
+          InteractionType.dislike: false,
+        };
+      } else {
+        // Ajouter le dislike
+        _localDislikesCount[messageId] = _localDislikesCount[messageId]! + 1;
+        
+        // Retirer le like si présent
+        if (isCurrentlyLiked) {
+          _localLikesCount[messageId] = _localLikesCount[messageId]! - 1;
+        }
+        
+        _localInteractions[userInteractionKey] = {
+          InteractionType.like: false,
+          InteractionType.dislike: true,
+        };
+      }
+    });
+
+    // Appel Firebase en arrière-plan
     try {
       await FeedbackService.toggleInteraction(
         messageId: messageId,
         type: InteractionType.dislike,
       );
     } catch (e) {
+      // En cas d'erreur, on revert les changements locaux
+      setState(() {
+        if (isCurrentlyDisliked) {
+          _localDislikesCount[messageId] = currentDislikes;
+        } else {
+          _localDislikesCount[messageId] = currentDislikes;
+          if (isCurrentlyLiked) {
+            _localLikesCount[messageId] = currentLikes;
+          }
+        }
+        _localInteractions.remove(userInteractionKey);
+      });
       _showError('Erreur dislike: $e');
     }
+  }
+
+  // Méthode pour obtenir le compteur local ou le compteur d'origine
+  int _getLocalLikesCount(String messageId, int originalLikes) {
+    return _localLikesCount[messageId] ?? originalLikes;
+  }
+
+  int _getLocalDislikesCount(String messageId, int originalDislikes) {
+    return _localDislikesCount[messageId] ?? originalDislikes;
+  }
+
+  // Méthode pour vérifier l'état local des interactions
+  bool _isLikedByCurrentUser(String messageId) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return false;
+    final userInteractionKey = '${currentUser.uid}_$messageId';
+    return _localInteractions[userInteractionKey]?[InteractionType.like] ?? false;
+  }
+
+  bool _isDislikedByCurrentUser(String messageId) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return false;
+    final userInteractionKey = '${currentUser.uid}_$messageId';
+    return _localInteractions[userInteractionKey]?[InteractionType.dislike] ?? false;
   }
 
   void _showError(String message) {
@@ -289,9 +426,62 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     );
   }
 
+  Future<void> _deleteMessage(String messageId) async {
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Color(0xFF2d0052),
+          surfaceTintColor: Colors.transparent,
+          title: Text(
+            'Supprimer le message',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Annuler', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Supprimer'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        await FeedbackService.deleteMessage(messageId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Message supprimé avec succès'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Erreur lors de la suppression: $e');
+    }
+  }
+
   Widget _buildMessageItem(Message message) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final isCurrentUser = message.userId == currentUser?.uid;
+    
+    // Utiliser les compteurs locaux si disponibles
+    final displayLikes = _getLocalLikesCount(message.id, message.likesCount);
+    final displayDislikes = _getLocalDislikesCount(message.id, message.dislikesCount);
+    final isLiked = _isLikedByCurrentUser(message.id);
+    final isDisliked = _isDislikedByCurrentUser(message.id);
     
     return Container(
       margin: EdgeInsets.only(bottom: 16, left: isCurrentUser ? 50 : 0, right: isCurrentUser ? 0 : 50),
@@ -447,24 +637,38 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ),
                 ],
                 
-                // Interactions
+                // Interactions et actions admin
                 SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
                   children: [
+                    // Bouton Like
                     GestureDetector(
-                      onTap: () => _likeMessage(message.id),
+                      onTap: () => _likeMessage(message.id, message.likesCount, message.dislikesCount),
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isLiked ? Color(0xFF00d4ff).withOpacity(0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isLiked ? Color(0xFF00d4ff) : Colors.transparent,
+                            width: 1,
+                          ),
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.thumb_up, color: Color(0xFF00d4ff), size: 14),
+                            Icon(
+                              Icons.thumb_up, 
+                              color: isLiked ? Color(0xFF00d4ff) : Color(0xFF00d4ff).withOpacity(0.7), 
+                              size: 14
+                            ),
                             SizedBox(width: 4),
                             Text(
-                              message.likesCount.toString(),
+                              displayLikes.toString(),
                               style: TextStyle(
-                                color: Color(0xFF00d4ff),
+                                color: isLiked ? Color(0xFF00d4ff) : Color(0xFF00d4ff).withOpacity(0.7),
                                 fontSize: 12,
+                                fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -472,56 +676,103 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       ),
                     ),
                     SizedBox(width: 12),
+                    
+                    // Bouton Dislike
                     GestureDetector(
-                      onTap: () => _dislikeMessage(message.id),
+                      onTap: () => _dislikeMessage(message.id, message.likesCount, message.dislikesCount),
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDisliked ? Color(0xFFff006e).withOpacity(0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDisliked ? Color(0xFFff006e) : Colors.transparent,
+                            width: 1,
+                          ),
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.thumb_down, color: Color(0xFFff006e), size: 14),
+                            Icon(
+                              Icons.thumb_down, 
+                              color: isDisliked ? Color(0xFFff006e) : Color(0xFFff006e).withOpacity(0.7), 
+                              size: 14
+                            ),
                             SizedBox(width: 4),
                             Text(
-                              message.dislikesCount.toString(),
+                              displayDislikes.toString(),
                               style: TextStyle(
-                                color: Color(0xFFff006e),
+                                color: isDisliked ? Color(0xFFff006e) : Color(0xFFff006e).withOpacity(0.7),
                                 fontSize: 12,
+                                fontWeight: isDisliked ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
+                    
+                    // Bouton Suppression pour admin (à côté des interactions)
+                    if (_isAdmin) ...[
+                      SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => _deleteMessage(message.id),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                color: Colors.red.withOpacity(0.7),
+                                size: 14,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 
-                // Bouton réponse admin
+                // Bouton réponse admin (en dessous)
                 if (_isAdmin && !message.hasResponse) ...[
                   SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () => _showAdminResponseDialog(message.id),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF00d4ff).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Color(0xFF00d4ff)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.reply, color: Color(0xFF00d4ff), size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Répondre',
-                            style: TextStyle(
-                              color: Color(0xFF00d4ff),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showAdminResponseDialog(message.id),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF00d4ff).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Color(0xFF00d4ff)),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.reply, color: Color(0xFF00d4ff), size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'Répondre',
+                                style: TextStyle(
+                                  color: Color(0xFF00d4ff),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ],

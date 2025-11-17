@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -35,6 +34,179 @@ class GameScreen extends StatefulWidget {
   _GameScreenState createState() => _GameScreenState();
 }
 
+class _QuickMessageModal extends StatefulWidget {
+  final bool isOnlineGame;
+  final Function(String) onMessageSent;
+
+  const _QuickMessageModal({
+    required this.isOnlineGame,
+    required this.onMessageSent,
+  });
+
+  @override
+  __QuickMessageModalState createState() => __QuickMessageModalState();
+}
+
+class __QuickMessageModalState extends State<_QuickMessageModal> 
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<Offset> _slideAnimation;
+
+  final List<Map<String, dynamic>> _messages = [
+    {'text': '😂', 'type': 'emoji'},
+    {'text': '😢', 'type': 'emoji'},
+    {'text': '😠', 'type': 'emoji'},
+    {'text': '👍', 'type': 'emoji'},
+    {'text': 'C\'est ton tour!', 'type': 'text'},
+    {'text': 'Belle partie!', 'type': 'text'},
+    {'text': 'Mais joue!', 'type': 'text'},
+    {'text': 'Joue bien!', 'type': 'text'},
+    {'text': 'Stp joue', 'type': 'text'},
+    {'text': 'Bien joué!', 'type': 'text'},
+    {'text': 'Oops!', 'type': 'text'},
+    {'text': 'Bravo!', 'type': 'text'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: Offset(0, 1),
+      end: Offset(0, 0),
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _animationController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _closeModal() {
+    _animationController.reverse().then((_) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
+  void _sendMessage(String message) {
+    widget.onMessageSent(message);
+    _closeModal();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: Container(
+        margin: EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header du modal
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Color(0xFF2d0052),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border.all(color: Color(0xFF9c27b0)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Messages Rapides',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white, size: 20),
+                    onPressed: _closeModal,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints.tightFor(width: 32, height: 32),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Contenu des messages
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Color(0xFF1a0033),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                border: Border(
+                  left: BorderSide(color: Color(0xFF9c27b0)),
+                  right: BorderSide(color: Color(0xFF9c27b0)),
+                  bottom: BorderSide(color: Color(0xFF9c27b0)),
+                ),
+              ),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.2,
+                ),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final message = _messages[index];
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _sendMessage(message['text']),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Color(0xFF2d0052),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Color(0xFF4a0080)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            message['text'],
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: message['type'] == 'emoji' ? 20 : 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   List<GridPoint> points = [];
   List<Square> squares = [];
@@ -43,6 +215,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool isGameFinished = false;
   bool _resultModalShown = false;
   bool _isSpectator = false;
+  OverlayEntry? _messageOverlayEntry;
 
   void _checkUserStatus() {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -92,43 +265,43 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _isMyTurn = false;
   bool _isOnlineGame = false;
 
-String get _bluePlayerName {
-  String name;
-  if (widget.isAgainstAI) {
-    name = _currentUserPlayer?.username ?? 'VOUS';
-  } else if (_isOnlineGame) {
-    name = _myPlayerColor == 'bleu' 
-        ? (_currentUserPlayer?.username ?? 'VOUS')
-        : (_opponentPlayer?.username ?? 'ADVERSAIRE');
-  } else {
-    name = 'BLEU';
+  String get _bluePlayerName {
+    String name;
+    if (widget.isAgainstAI) {
+      name = _currentUserPlayer?.username ?? 'VOUS';
+    } else if (_isOnlineGame) {
+      name = _myPlayerColor == 'bleu' 
+          ? (_currentUserPlayer?.username ?? 'VOUS')
+          : (_opponentPlayer?.username ?? 'ADVERSAIRE');
+    } else {
+      name = 'BLEU';
+    }
+    
+    // Tronquer le nom si plus de 10 caractères
+    if (name.length > 11) {
+      return name.substring(0, 11) + "..";
+    }
+    return name;
   }
-  
-  // Tronquer le nom si plus de 10 caractères
-  if (name.length > 11) {
-    return name.substring(0, 11) + "..";
-  }
-  return name;
-}
 
-String get _redPlayerName {
-  String name;
-  if (widget.isAgainstAI) {
-    name = 'IA ${widget.aiDifficulty.toString().split('.').last.toUpperCase()}';
-  } else if (_isOnlineGame) {
-    name = _myPlayerColor == 'rouge' 
-        ? (_currentUserPlayer?.username ?? 'VOUS')
-        : (_opponentPlayer?.username ?? 'ADVERSAIRE');
-  } else {
-    name = 'ROUGE';
+  String get _redPlayerName {
+    String name;
+    if (widget.isAgainstAI) {
+      name = 'IA ${widget.aiDifficulty.toString().split('.').last.toUpperCase()}';
+    } else if (_isOnlineGame) {
+      name = _myPlayerColor == 'rouge' 
+          ? (_currentUserPlayer?.username ?? 'VOUS')
+          : (_opponentPlayer?.username ?? 'ADVERSAIRE');
+    } else {
+      name = 'ROUGE';
+    }
+    
+    // Tronquer le nom si plus de 10 caractères
+    if (name.length > 11) {
+      return name.substring(0, 11) + "..";
+    }
+    return name;
   }
-  
-  // Tronquer le nom si plus de 10 caractères
-  if (name.length > 11) {
-    return name.substring(0, 11) + "..";
-  }
-  return name;
-}
 
   @override
   void initState() {
@@ -173,59 +346,62 @@ String get _redPlayerName {
     });
   }
     
-void _initializeGameData() async {
-  final currentUser = FirebaseAuth.instance.currentUser;
-  if (currentUser != null) {
-    _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
-  }
-
-  if (widget.existingGame != null && !widget.isAgainstAI) {
-    _isOnlineGame = true;
-    _gameId = widget.existingGame!.id;
-    
-    // Vérifier si l'utilisateur est un joueur ou spectateur
-    final isPlayer = widget.existingGame!.players.contains(currentUser!.uid);
-    _isSpectator = !isPlayer;
-    
-    if (isPlayer) {
-      // Logique existante pour les joueurs
-      if (widget.existingGame!.player1Id == _currentUserId) {
-        _myPlayerColor = 'bleu';
-      } else if (widget.existingGame!.player2Id == _currentUserId) {
-        _myPlayerColor = 'rouge';
-      }
-      
-      final opponentId = _myPlayerColor == 'bleu' 
-          ? widget.existingGame!.player2Id 
-          : widget.existingGame!.player1Id;
-      
-      if (opponentId != null) {
-        _opponentPlayer = await GameService.getPlayer(opponentId);
-      }
-    } else {
-      // Logique pour les spectateurs
-      print('👀 Initialisation en mode spectateur');
-      
-      // 🎯 IMPORTANT : Les spectateurs doivent aussi charger les infos des joueurs
-      if (widget.existingGame!.player1Id != null) {
-        _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
-      }
-      if (widget.existingGame!.player2Id != null && _opponentPlayer == null) {
-        _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
-      }
-      
-      _joinAsSpectator();
+  void _initializeGameData() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
     }
-    
-    // 🎯 TOUS LES UTILISATEURS (JOUEURS ET SPECTATEURS) DOIVENT ÉCOUTER LES MISE À JOUR
-    _startListeningToGameUpdates();
-    _loadSpectators();
-  } else if (widget.opponentId != null) {
-    _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
-  }
 
-  setState(() {});
-}
+    if (widget.existingGame != null && !widget.isAgainstAI) {
+      _isOnlineGame = true;
+      _gameId = widget.existingGame!.id;
+      
+      // Vérifier si l'utilisateur est un joueur ou spectateur
+      final isPlayer = widget.existingGame!.players.contains(currentUser!.uid);
+      _isSpectator = !isPlayer;
+      
+      if (isPlayer) {
+        // Logique existante pour les joueurs
+        if (widget.existingGame!.player1Id == _currentUserId) {
+          _myPlayerColor = 'bleu';
+        } else if (widget.existingGame!.player2Id == _currentUserId) {
+          _myPlayerColor = 'rouge';
+        }
+        
+        final opponentId = _myPlayerColor == 'bleu' 
+            ? widget.existingGame!.player2Id 
+            : widget.existingGame!.player1Id;
+        
+        if (opponentId != null) {
+          _opponentPlayer = await GameService.getPlayer(opponentId);
+        }
+      // 🆕 Démarrer l'écoute des messages
+      _startListeningToMessages();
+        
+      } else {
+        // Logique pour les spectateurs
+        print('👀 Initialisation en mode spectateur');
+        
+        // 🎯 IMPORTANT : Les spectateurs doivent aussi charger les infos des joueurs
+        if (widget.existingGame!.player1Id != null) {
+          _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
+        }
+        if (widget.existingGame!.player2Id != null && _opponentPlayer == null) {
+          _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
+        }
+        
+        _joinAsSpectator();
+      }
+      
+      // 🎯 TOUS LES UTILISATEURS (JOUEURS ET SPECTATEURS) DOIVENT ÉCOUTER LES MISE À JOUR
+      _startListeningToGameUpdates();
+      _loadSpectators();
+    } else if (widget.opponentId != null) {
+      _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
+    }
+
+    setState(() {});
+  }
 
   void _initializeTimers() {
     if (_timerInitialized) return;
@@ -235,113 +411,115 @@ void _initializeGameData() async {
     _timerInitialized = true;
   }
     
-void _startListeningToGameUpdates() {
-  if (_gameId == null) return;
-  
-  _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
-    if (game == null || !mounted) return;
+  void _startListeningToGameUpdates() {
+    if (_gameId == null) return;
     
-    print('🔄 Sync Firestore - Status: ${game.status}, Temps: ${game.timeRemaining}');
-    
-    setState(() {
-      points = game.points;
-      squares = game.squares;
+    _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
+      if (game == null || !mounted) return;
       
-      scores = {
-        'bleu': game.scores[game.player1Id] ?? 0,
-        'rouge': game.scores[game.player2Id] ?? 0,
-      };
+      print('🔄 Sync Firestore - Status: ${game.status}, Temps: ${game.timeRemaining}');
       
-      // Synchroniser le currentPlayer
-      if (game.currentPlayer == game.player1Id) {
-        currentPlayer = 'bleu';
-      } else if (game.currentPlayer == game.player2Id) {
-        currentPlayer = 'rouge';
-      }
-      
-      _isMyTurn = (currentPlayer == _myPlayerColor);
-      _timeRemaining = game.timeRemaining;
-      _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
-      
-      // SYNCHRONISATION DU TEMPS DE RÉFLEXION
-      if (game.reflexionTimeRemaining != null) {
-        final currentPlayerId = currentPlayer == 'bleu' 
-            ? widget.existingGame!.player1Id! 
-            : widget.existingGame!.player2Id!;
+      setState(() {
+        points = game.points;
+        squares = game.squares;
         
-        final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
-        if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
-          print('🎯 Mise à jour temps réflexion: $reflexionTime');
-          _reflexionTimeRemaining = reflexionTime;
-        }
-      }
-      
-      // Gestion fin de partie - AMÉLIORATION ICI
-      final wasGameFinished = isGameFinished;
-      isGameFinished = game.status == GameStatus.finished;
-      
-      if (isGameFinished && !wasGameFinished) {
-        print('🎯 Partie terminée détectée via Firestore - Scores: $scores');
-        _cancelAllTimers();
-        
-        // Mettre à jour les scores finaux depuis Firestore
         scores = {
           'bleu': game.scores[game.player1Id] ?? 0,
           'rouge': game.scores[game.player2Id] ?? 0,
         };
         
-        if (!_resultModalShown) {
-          print('🚀 Déclenchement modal de résultat...');
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_resultModalShown) {
-              _showResultModal();
-            }
-          });
+        // Synchroniser le currentPlayer
+        if (game.currentPlayer == game.player1Id) {
+          currentPlayer = 'bleu';
+        } else if (game.currentPlayer == game.player2Id) {
+          currentPlayer = 'rouge';
         }
-      }
+        
+        _isMyTurn = (currentPlayer == _myPlayerColor);
+        _timeRemaining = game.timeRemaining;
+        _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
+        
+        // SYNCHRONISATION DU TEMPS DE RÉFLEXION
+        if (game.reflexionTimeRemaining != null) {
+          final currentPlayerId = currentPlayer == 'bleu' 
+              ? widget.existingGame!.player1Id! 
+              : widget.existingGame!.player2Id!;
+          
+          final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
+          if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
+            print('🎯 Mise à jour temps réflexion: $reflexionTime');
+            _reflexionTimeRemaining = reflexionTime;
+          }
+        }
+        
+        // Gestion fin de partie - AMÉLIORATION ICI
+        final wasGameFinished = isGameFinished;
+        isGameFinished = game.status == GameStatus.finished;
+        
+        if (isGameFinished && !wasGameFinished) {
+          print('🎯 Partie terminée détectée via Firestore - Scores: $scores');
+          _cancelAllTimers();
+          
+          // Mettre à jour les scores finaux depuis Firestore
+          scores = {
+            'bleu': game.scores[game.player1Id] ?? 0,
+            'rouge': game.scores[game.player2Id] ?? 0,
+          };
+          
+          if (!_resultModalShown) {
+            print('🚀 Déclenchement modal de résultat...');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_resultModalShown) {
+                _showResultModal();
+              }
+            });
+          }
+        }
+      });
+    }, onError: (error) {
+      print('❌ Erreur écoute partie: $error');
     });
-  }, onError: (error) {
-    print('❌ Erreur écoute partie: $error');
-  });
-}
-void _handleMissedTurnFromFirestore(String playerId) {
-  if (!_isOnlineGame || _gameId == null) return;
-  
-  // Vérifier que c'est bien le tour de ce joueur
-  final isCurrentPlayer = (playerId == widget.existingGame!.player1Id && currentPlayer == 'bleu') ||
-                         (playerId == widget.existingGame!.player2Id && currentPlayer == 'rouge');
-  
-  if (isCurrentPlayer && !isGameFinished) {
-    print('🔄 Tour manqué détecté depuis Firestore pour: $playerId');
+  }
+
+  void _handleMissedTurnFromFirestore(String playerId) {
+    if (!_isOnlineGame || _gameId == null) return;
     
-    final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
-    final newMissedTurns = currentMissedTurns + 1;
+    // Vérifier que c'est bien le tour de ce joueur
+    final isCurrentPlayer = (playerId == widget.existingGame!.player1Id && currentPlayer == 'bleu') ||
+                           (playerId == widget.existingGame!.player2Id && currentPlayer == 'rouge');
     
-    final updatedMissedTurns = {
-      ...widget.existingGame!.consecutiveMissedTurns,
-      playerId: newMissedTurns
-    };
-    
-    // UTILISER UN TRY-CATCH POUR ÉVITER LES ERREURS BLOQUANTES
-    try {
-      GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
-    } catch (e) {
-      print('⚠️ Erreur non critique mise à jour tours manqués: $e');
-    }
-    
-    // Changer de joueur
-    final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-    final nextPlayerId = nextPlayer == 'bleu' 
-        ? widget.existingGame!.player1Id! 
-        : widget.existingGame!.player2Id!;
-    
-    try {
-      GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
-    } catch (e) {
-      print('⚠️ Erreur non critique changement joueur: $e');
+    if (isCurrentPlayer && !isGameFinished) {
+      print('🔄 Tour manqué détecté depuis Firestore pour: $playerId');
+      
+      final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
+      final newMissedTurns = currentMissedTurns + 1;
+      
+      final updatedMissedTurns = {
+        ...widget.existingGame!.consecutiveMissedTurns,
+        playerId: newMissedTurns
+      };
+      
+      // UTILISER UN TRY-CATCH POUR ÉVITER LES ERREURS BLOQUANTES
+      try {
+        GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
+      } catch (e) {
+        print('⚠️ Erreur non critique mise à jour tours manqués: $e');
+      }
+      
+      // Changer de joueur
+      final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+      final nextPlayerId = nextPlayer == 'bleu' 
+          ? widget.existingGame!.player1Id! 
+          : widget.existingGame!.player2Id!;
+      
+      try {
+        GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
+      } catch (e) {
+        print('⚠️ Erreur non critique changement joueur: $e');
+      }
     }
   }
-}
+
   void _loadSpectators() {
     if (_gameId == null) return;
     
@@ -376,7 +554,11 @@ void _handleMissedTurnFromFirestore(String playerId) {
     _scoreAnimationController.dispose();
     _radarAnimationController.dispose();
     _gameStreamSubscription?.cancel();
-      // 🚪 QUITTER EN TANT QUE SPECTATEUR SEULEMENT SI ON ÉTAIT SPECTATEUR
+    
+    // 🆕 Nettoyer l'overlay de message s'il existe
+    _messageOverlayEntry?.remove();
+    
+    // 🚪 QUITTER EN TANT QUE SPECTATEUR SEULEMENT SI ON ÉTAIT SPECTATEUR
     if (_isSpectator && _gameId != null && _currentUserId != null) {
       _leaveAsSpectator();
     }
@@ -440,30 +622,30 @@ void _handleMissedTurnFromFirestore(String playerId) {
     }
   }
 
-void _executeAIMove(GridPoint aiMove) {
-  if (isGameFinished || !mounted) return;
-  
-  setState(() {
-    points.add(aiMove);
-    _startRadarAnimation(aiMove);
-    final newSquares = GameLogic.checkSquares(points, widget.gridSize, aiPlayerId, aiMove.x, aiMove.y);
-    squares.addAll(newSquares);
-    scores[aiPlayerId] = scores[aiPlayerId]! + newSquares.length;
+  void _executeAIMove(GridPoint aiMove) {
+    if (isGameFinished || !mounted) return;
     
-    if (points.length >= widget.gridSize * widget.gridSize) {
-      isGameFinished = true;
-      _cancelAllTimers();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_resultModalShown) {
-          _showResultModal();
-        }
-      });
-    } else {
-      _resetReflexionTimer();
-      _switchPlayer();
-    }
-  });
-}
+    setState(() {
+      points.add(aiMove);
+      _startRadarAnimation(aiMove);
+      final newSquares = GameLogic.checkSquares(points, widget.gridSize, aiPlayerId, aiMove.x, aiMove.y);
+      squares.addAll(newSquares);
+      scores[aiPlayerId] = scores[aiPlayerId]! + newSquares.length;
+      
+      if (points.length >= widget.gridSize * widget.gridSize) {
+        isGameFinished = true;
+        _cancelAllTimers();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_resultModalShown) {
+            _showResultModal();
+          }
+        });
+      } else {
+        _resetReflexionTimer();
+        _switchPlayer();
+      }
+    });
+  }
 
   void _initializeGame() {
     points = [];
@@ -501,58 +683,58 @@ void _executeAIMove(GridPoint aiMove) {
     });
   }
 
-void _startReflexionTimer() {
-  _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-    if (!mounted) {
-      timer.cancel();
-      return;
-    }
+  void _startReflexionTimer() {
+    _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
 
-    if (_isOnlineGame && _isMyTurn) {
-      // APPROCHE CLIENT MAÎTRE : Seul le client dont c'est le tour décrémente
-      if (_reflexionTimeRemaining > 0) {
-        setState(() => _reflexionTimeRemaining--);
-        
-        // Mettre à jour Firestore (sans attendre pour la fluidité)
-        if (_gameId != null && _currentUserId != null) {
-          GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, _reflexionTimeRemaining);
+      if (_isOnlineGame && _isMyTurn) {
+        // APPROCHE CLIENT MAÎTRE : Seul le client dont c'est le tour décrémente
+        if (_reflexionTimeRemaining > 0) {
+          setState(() => _reflexionTimeRemaining--);
+          
+          // Mettre à jour Firestore (sans attendre pour la fluidité)
+          if (_gameId != null && _currentUserId != null) {
+            GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, _reflexionTimeRemaining);
+          }
+        } else {
+          // Temps écoulé
+          print('⏱️ Temps réflexion écoulé (maître)');
+          _handleMissedTurnFromFirestore(_currentUserId!);
         }
-      } else {
-        // Temps écoulé
-        print('⏱️ Temps réflexion écoulé (maître)');
-        _handleMissedTurnFromFirestore(_currentUserId!);
+      } else if (!_isOnlineGame) {
+        // Logique locale pour les parties hors ligne
+        if (_reflexionTimeRemaining > 0) {
+          setState(() => _reflexionTimeRemaining--);
+        } else {
+          print('⏱️ Temps réflexion écoulé (local)');
+          _handleMissedTurn();
+          _resetReflexionTimer();
+        }
       }
-    } else if (!_isOnlineGame) {
-      // Logique locale pour les parties hors ligne
-      if (_reflexionTimeRemaining > 0) {
-        setState(() => _reflexionTimeRemaining--);
-      } else {
-        print('⏱️ Temps réflexion écoulé (local)');
-        _handleMissedTurn();
-        _resetReflexionTimer();
-      }
-    }
-  });
-}
-
-void _handleMissedTurn() {
-  if (_isOnlineGame && _gameId != null && _currentUserId != null) {
-    // Pour les parties en ligne, utiliser la méthode Firestore
-    _handleMissedTurnFromFirestore(_currentUserId!);
-  } else {
-    // Logique locale existante...
-    final currentPlayerId = currentPlayer;
-    final currentMissedTurns = 0;
-    final newMissedTurns = currentMissedTurns + 1;
-    
-    if (newMissedTurns >= 3) {
-      _endGameByMissedTurns(currentPlayerId);
-      return;
-    }
-    
-    _switchPlayer();
+    });
   }
-}
+
+  void _handleMissedTurn() {
+    if (_isOnlineGame && _gameId != null && _currentUserId != null) {
+      // Pour les parties en ligne, utiliser la méthode Firestore
+      _handleMissedTurnFromFirestore(_currentUserId!);
+    } else {
+      // Logique locale existante...
+      final currentPlayerId = currentPlayer;
+      final currentMissedTurns = 0;
+      final newMissedTurns = currentMissedTurns + 1;
+      
+      if (newMissedTurns >= 3) {
+        _endGameByMissedTurns(currentPlayerId);
+        return;
+      }
+      
+      _switchPlayer();
+    }
+  }
 
   void _endGameByMissedTurns(String playerWhoMissed) async {
     print('🏁 Fin de partie par tours manqués: $playerWhoMissed');
@@ -587,80 +769,81 @@ void _handleMissedTurn() {
     GameStartService().exitGame();
   }
 
-void _resetReflexionTimer() {
-  _reflexionTimer.cancel();
-  
-  if (_isOnlineGame) {
-    // Pour les parties en ligne, réinitialiser via Firestore
-    if (_gameId != null && _currentUserId != null && _isMyTurn) {
-      setState(() => _reflexionTimeRemaining = widget.reflexionTime);
-      GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, widget.reflexionTime);
-    }
-    _startReflexionTimer();
-  } else {
-    // Logique locale
-    setState(() => _reflexionTimeRemaining = widget.reflexionTime);
-    _startReflexionTimer();
-  }
-}
-
-void _switchPlayer() {
-  if (_isOnlineGame) {
-    if (_gameId != null && widget.existingGame != null) {
-      final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-      final nextPlayerId = nextPlayer == 'bleu' 
-          ? widget.existingGame!.player1Id! 
-          : widget.existingGame!.player2Id!;
-      
-      print('🔄 Switch vers: $nextPlayer (ID: $nextPlayerId)');
-      
-      // Mettre à jour le currentPlayer dans Firestore
-      GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
-    }
-  } else {
-    // Logique locale inchangée
-    setState(() {
-      currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-      _reflexionTimeRemaining = widget.reflexionTime;
-    });
+  void _resetReflexionTimer() {
+    _reflexionTimer.cancel();
     
-    if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
-      _startAITurn();
+    if (_isOnlineGame) {
+      // Pour les parties en ligne, réinitialiser via Firestore
+      if (_gameId != null && _currentUserId != null && _isMyTurn) {
+        setState(() => _reflexionTimeRemaining = widget.reflexionTime);
+        GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, widget.reflexionTime);
+      }
+      _startReflexionTimer();
+    } else {
+      // Logique locale
+      setState(() => _reflexionTimeRemaining = widget.reflexionTime);
+      _startReflexionTimer();
     }
   }
-}
 
-void _endGameByTime() async {
-  print('🏁 Fin de partie par temps écoulé');
-  
-  if (_isOnlineGame && _gameId != null) {
-    try {
-      // APPELER DIRECTEMENT LE SERVICE SANS ATTENDRE
-      await GameService.updateGameTime(_gameId!, 0);
-      print('✅ Temps mis à jour à 0 dans Firestore');
-    } catch (e) {
-      print('❌ Erreur mise à jour temps: $e');
-      // FALLBACK: Marquer la partie comme terminée localement
+  void _switchPlayer() {
+    if (_isOnlineGame) {
+      if (_gameId != null && widget.existingGame != null) {
+        final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+        final nextPlayerId = nextPlayer == 'bleu' 
+            ? widget.existingGame!.player1Id! 
+            : widget.existingGame!.player2Id!;
+        
+        print('🔄 Switch vers: $nextPlayer (ID: $nextPlayerId)');
+        
+        // Mettre à jour le currentPlayer dans Firestore
+        GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
+      }
+    } else {
+      // Logique locale inchangée
+      setState(() {
+        currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+        _reflexionTimeRemaining = widget.reflexionTime;
+      });
+      
+      if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
+        _startAITurn();
+      }
+    }
+  }
+
+  void _endGameByTime() async {
+    print('🏁 Fin de partie par temps écoulé');
+    
+    if (_isOnlineGame && _gameId != null) {
+      try {
+        // APPELER DIRECTEMENT LE SERVICE SANS ATTENDRE
+        await GameService.updateGameTime(_gameId!, 0);
+        print('✅ Temps mis à jour à 0 dans Firestore');
+      } catch (e) {
+        print('❌ Erreur mise à jour temps: $e');
+        // FALLBACK: Marquer la partie comme terminée localement
+        setState(() {
+          isGameFinished = true;
+          _cancelAllTimers();
+        });
+        _showResultModal();
+      }
+    } else {
       setState(() {
         isGameFinished = true;
         _cancelAllTimers();
       });
-      _showResultModal();
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_resultModalShown) {
+          _showResultModal();
+        }
+      });
     }
-  } else {
-    setState(() {
-      isGameFinished = true;
-      _cancelAllTimers();
-    });
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_resultModalShown) {
-        _showResultModal();
-      }
-    });
+    GameStartService().exitGame();
   }
-  GameStartService().exitGame();
-}
+
   void _onPointTap(int x, int y) async {
       // 🚫 BLOQUER L'INTERACTION POUR LES SPECTATEURS
     if (_isSpectator) {
@@ -764,33 +947,33 @@ void _endGameByTime() async {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
-void _showResultModal() {
-  if (_resultModalShown || !mounted) return;
-  _resultModalShown = true;
-  
-  print('🎊 AFFICHAGE MODAL - Scores: $scores, En ligne: $_isOnlineGame');
-  
-  // S'assurer que tous les timers sont arrêtés
-  _cancelAllTimers();
-  
-  Future.delayed(Duration(milliseconds: 500), () {
-    if (!mounted) {
-      print('❌ Modal non monté');
-      return;
-    }
+  void _showResultModal() {
+    if (_resultModalShown || !mounted) return;
+    _resultModalShown = true;
     
-    print('✅ Affichage du modal de résultat...');
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.9),
-      barrierDismissible: false,
-      builder: (BuildContext context) => _buildResultModal(),
-    ).then((_) {
-      _resultModalShown = false;
-      print('🔒 Modal fermé');
+    print('🎊 AFFICHAGE MODAL - Scores: $scores, En ligne: $_isOnlineGame');
+    
+    // S'assurer que tous les timers sont arrêtés
+    _cancelAllTimers();
+    
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (!mounted) {
+        print('❌ Modal non monté');
+        return;
+      }
+      
+      print('✅ Affichage du modal de résultat...');
+      showDialog(
+        context: context,
+        barrierColor: Colors.black.withOpacity(0.9),
+        barrierDismissible: false,
+        builder: (BuildContext context) => _buildResultModal(),
+      ).then((_) {
+        _resultModalShown = false;
+        print('🔒 Modal fermé');
+      });
     });
-  });
-}
+  }
 
   Widget _buildReflexionTimer() {
     return Container(
@@ -814,152 +997,185 @@ void _showResultModal() {
     );
   }
 
-Widget _buildResultModal() {
-  final isDraw = scores['bleu']! == scores['rouge']!;
-  final winner = scores['bleu']! > scores['rouge']! ? 'bleu' : 'rouge';
-  final winnerName = winner == 'bleu' ? _bluePlayerName : _redPlayerName;
-  
-  // Déterminer si l'utilisateur actuel a gagné (pour les parties en ligne)
-  bool isCurrentUserWinner = false;
-  String resultMessage = '';
-  
-  if (_isOnlineGame) {
-    if (isDraw) {
-      resultMessage = 'MATCH NUL';
-    } else if (winner == 'bleu' && _myPlayerColor == 'bleu') {
-      isCurrentUserWinner = true;
-      resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
-    } else if (winner == 'rouge' && _myPlayerColor == 'rouge') {
-      isCurrentUserWinner = true;
-      resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
-    } else {
-      resultMessage = '😔 VOUS AVEZ PERDU';
+  Widget _buildResultModal() {
+    final isDraw = scores['bleu']! == scores['rouge']!;
+    final winner = scores['bleu']! > scores['rouge']! ? 'bleu' : 'rouge';
+    final winnerName = winner == 'bleu' ? _bluePlayerName : _redPlayerName;
+    
+    // Déterminer si l'utilisateur actuel a gagné (pour les parties en ligne)
+    bool isCurrentUserWinner = false;
+    String resultMessage = '';
+    
+    if (_isOnlineGame) {
+      if (isDraw) {
+        resultMessage = 'MATCH NUL';
+      } else if (winner == 'bleu' && _myPlayerColor == 'bleu') {
+        isCurrentUserWinner = true;
+        resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
+      } else if (winner == 'rouge' && _myPlayerColor == 'rouge') {
+        isCurrentUserWinner = true;
+        resultMessage = '🎉 VOUS AVEZ GAGNÉ !';
+      } else {
+        resultMessage = '😔 VOUS AVEZ PERDU';
+      }
     }
-  }
-  
-  return Stack(
-    children: [
-      Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF2d0052), Color(0xFF1a0033)],
-              ),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(color: Color(0xFF9c27b0), width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0xFF9c27b0).withOpacity(0.5),
-                  blurRadius: 30,
-                  spreadRadius: 5,
+    
+    return Stack(
+      children: [
+        Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF2d0052), Color(0xFF1a0033)],
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isDraw ? 'MATCH NUL !' : 'VICTOIRE !',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-                if (_isOnlineGame && !isDraw) ...[
-                  SizedBox(height: 10),
-                  Text(
-                    resultMessage,
-                    style: TextStyle(
-                      color: isCurrentUserWinner ? Colors.yellow : Colors.white70,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: Color(0xFF9c27b0), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF9c27b0).withOpacity(0.5),
+                    blurRadius: 30,
+                    spreadRadius: 5,
                   ),
                 ],
-                SizedBox(height: 10),
-                if (!isDraw) _buildWinnerProfile(winner, winnerName),
-                if (isDraw) _buildDrawProfiles(),
-                SizedBox(height: 20),
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        Color(0xFFFFD700).withOpacity(0.8),
-                        Color(0xFFFFA000).withOpacity(0.3),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isDraw ? 'MATCH NUL !' : 'VICTOIRE !',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  if (_isOnlineGame && !isDraw) ...[
+                    SizedBox(height: 10),
+                    Text(
+                      resultMessage,
+                      style: TextStyle(
+                        color: isCurrentUserWinner ? Colors.yellow : Colors.white70,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  SizedBox(height: 10),
+                  if (!isDraw) _buildWinnerProfile(winner, winnerName),
+                  if (isDraw) _buildDrawProfiles(),
+                  SizedBox(height: 20),
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Color(0xFFFFD700).withOpacity(0.8),
+                          Color(0xFFFFA000).withOpacity(0.3),
+                        ],
+                      ),
+                      border: Border.all(color: Color(0xFFFFD700), width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFFFFD700).withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
                       ],
                     ),
-                    border: Border.all(color: Color(0xFFFFD700), width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0xFFFFD700).withOpacity(0.5),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
+                    child: Icon(
+                      isDraw ? Icons.handshake : Icons.emoji_events,
+                      color: Colors.white,
+                      size: 60,
+                    ),
                   ),
-                  child: Icon(
-                    isDraw ? Icons.handshake : Icons.emoji_events,
-                    color: Colors.white,
-                    size: 60,
-                  ),
-                ),
-                SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Color(0xFF2d0052).withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Color(0xFF9c27b0), width: 1),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildModalScore(_bluePlayerName, scores['bleu']!, Color(0xFF00d4ff)),
-                      Container(
-                        width: 2,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.transparent, Color(0xFF9c27b0), Colors.transparent],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
+                  SizedBox(height: 20),
+                  Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF2d0052).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Color(0xFF9c27b0), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildModalScore(_bluePlayerName, scores['bleu']!, Color(0xFF00d4ff)),
+                        Container(
+                          width: 2,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Color(0xFF9c27b0), Colors.transparent],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
                           ),
                         ),
-                      ),
-                      _buildModalScore(_redPlayerName, scores['rouge']!, Color(0xFFff006e)),
-                    ],
+                        _buildModalScore(_redPlayerName, scores['rouge']!, Color(0xFFff006e)),
+                      ],
+                    ),
                   ),
-                ),
-                SizedBox(height: 30),
-                Column(
-                  children: [
-                    if (!_isOnlineGame) ...[
+                  SizedBox(height: 30),
+                  Column(
+                    children: [
+                      if (!_isOnlineGame) ...[
+                        Container(
+                          width: double.infinity,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF9c27b0).withOpacity(0.5),
+                                blurRadius: 20,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(15),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                setState(() => _initializeGame());
+                                _initializeTimers();
+                              },
+                              child: Center(
+                                child: Text(
+                                  'NOUVELLE PARTIE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                      ],
                       Container(
                         width: double.infinity,
                         height: 50,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
+                          color: Colors.transparent,
                           borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0xFF9c27b0).withOpacity(0.5),
-                              blurRadius: 20,
-                              offset: Offset(0, 8),
-                            ),
-                          ],
+                          border: Border.all(color: Color(0xFF9c27b0), width: 2),
                         ),
                         child: Material(
                           color: Colors.transparent,
@@ -967,64 +1183,31 @@ Widget _buildResultModal() {
                             borderRadius: BorderRadius.circular(15),
                             onTap: () {
                               Navigator.of(context).pop();
-                              setState(() => _initializeGame());
-                              _initializeTimers();
                             },
                             child: Center(
                               child: Text(
-                                'NOUVELLE PARTIE',
+                                'Fermer',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                      SizedBox(height: 12),
                     ],
-                    Container(
-                      width: double.infinity,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Color(0xFF9c27b0), width: 2),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(15),
-                          onTap: () {
-                            Navigator.of(context).pop();
-                          },
-                          child: Center(
-                            child: Text(
-                              'Fermer',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   Widget _buildWinnerProfile(String player, String playerName) {
     final color = _getPlayerColor(player);
@@ -1244,35 +1427,25 @@ Widget _buildResultModal() {
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.5,
                       ),
-                    ),
-                    if (_isOnlineGame) ...[
-                      SizedBox(width: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.wifi, color: Colors.green, size: 12),
-                            SizedBox(width: 4),
-                            Text(
-                              'EN LIGNE',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
+                    ),],
                 ),
               ),
+              // 🆕 AJOUT DE L'ICÔNE DE MESSAGE POUR LES PARTIES EN LIGNE
+              if (_isOnlineGame && !_isSpectator) 
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFF00d4ff), Color(0xFF0099cc)]),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
+                    onPressed: _showQuickMessageModal,
+                  ),
+                ),
+              SizedBox(width: 8),
               _buildGameMenuDropdown(),
             ],
           ),
@@ -1307,95 +1480,96 @@ Widget _buildResultModal() {
   }
 
   void _leaveAsSpectatorAndExit() {
-  _leaveAsSpectator();
-  Navigator.pop(context);
-}
+    _leaveAsSpectator();
+    Navigator.pop(context);
+  }
 
-Widget _buildGameMenuDropdown() {
-  return Container(
-    width: 40,
-    height: 40,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
-    ),
-    child: PopupMenuButton<String>(
-      padding: EdgeInsets.zero,
-      icon: Icon(Icons.more_vert, color: Colors.white, size: 20),
-      color: Color(0xFF2d0052),
-      onSelected: (String value) {
-        if (value == 'forfeit' && !_isSpectator) {
-          _showForfeitConfirmation();
-        } else if (value == 'new_game' && !_isOnlineGame) {
-          _showNewGameConfirmation();
-        } else if (value == 'leave_spectator' && _isSpectator) {
-          _leaveAsSpectatorAndExit();
-        }
-      },
-      itemBuilder: (BuildContext context) => [
-        // 🎯 OPTION POUR QUITTER EN TANT QUE SPECTATEUR
-        if (_isSpectator)
-          PopupMenuItem<String>(
-            value: 'leave_spectator',
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]),
+  Widget _buildGameMenuDropdown() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)]),
+      ),
+      child: PopupMenuButton<String>(
+        padding: EdgeInsets.zero,
+        icon: Icon(Icons.more_vert, color: Colors.white, size: 20),
+        color: Color(0xFF2d0052),
+        onSelected: (String value) {
+          if (value == 'forfeit' && !_isSpectator) {
+            _showForfeitConfirmation();
+          } else if (value == 'new_game' && !_isOnlineGame) {
+            _showNewGameConfirmation();
+          } else if (value == 'leave_spectator' && _isSpectator) {
+            _leaveAsSpectatorAndExit();
+          }
+        },
+        itemBuilder: (BuildContext context) => [
+          // 🎯 OPTION POUR QUITTER EN TANT QUE SPECTATEUR
+          if (_isSpectator)
+            PopupMenuItem<String>(
+              value: 'leave_spectator',
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]),
+                    ),
+                    child: Icon(Icons.exit_to_app, color: Colors.white, size: 18),
                   ),
-                  child: Icon(Icons.exit_to_app, color: Colors.white, size: 18),
-                ),
-                SizedBox(width: 12),
-                Text('Quitter l\'observation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ],
+                  SizedBox(width: 12),
+                  Text('Quitter l\'observation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
-          ),
-        // OPTIONS POUR LES JOUEURS SEULEMENT
-        if (!_isSpectator)
-          PopupMenuItem<String>(
-            value: 'forfeit',
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [Color(0xFFff006e), Color(0xFFc4005a)]),
+          // OPTIONS POUR LES JOUEURS SEULEMENT
+          if (!_isSpectator)
+            PopupMenuItem<String>(
+              value: 'forfeit',
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: [Color(0xFFff006e), Color(0xFFc4005a)]),
+                    ),
+                    child: Icon(Icons.flag, color: Colors.white, size: 18),
                   ),
-                  child: Icon(Icons.flag, color: Colors.white, size: 18),
-                ),
-                SizedBox(width: 12),
-                Text('Abandonner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ],
+                  SizedBox(width: 12),
+                  Text('Abandonner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
-          ),
-        if (!_isOnlineGame && !_isSpectator)
-          PopupMenuItem<String>(
-            value: 'new_game',
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(colors: [Color(0xFF00d4ff), Color(0xFF0099cc)]),
+          if (!_isOnlineGame && !_isSpectator)
+            PopupMenuItem<String>(
+              value: 'new_game',
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: [Color(0xFF00d4ff), Color(0xFF0099cc)]),
+                    ),
+                    child: Icon(Icons.refresh, color: Colors.white, size: 18),
                   ),
-                  child: Icon(Icons.refresh, color: Colors.white, size: 18),
-                ),
-                SizedBox(width: 12),
-                Text('Nouvelle partie', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              ],
+                  SizedBox(width: 12),
+                  Text('Nouvelle partie', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
-          ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
+
   void _showForfeitConfirmation() {
      if (_isSpectator) return; // 🚫 Bloqué pour les spectateurs
     showDialog(
@@ -1458,67 +1632,68 @@ Widget _buildGameMenuDropdown() {
     );
   }
 
-void _endGameByForfeit() async {
-  final loser = currentPlayer;
-  final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-  
-  if (_isOnlineGame && _gameId != null) {
-    final winnerId = _myPlayerColor == 'bleu' 
-        ? widget.existingGame!.player2Id 
-        : widget.existingGame!.player1Id;
-    final loserId = _myPlayerColor == 'bleu' 
-        ? widget.existingGame!.player1Id 
-        : widget.existingGame!.player2Id;
+  void _endGameByForfeit() async {
+    final loser = currentPlayer;
+    final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
     
-    try {
-      // 1. CALCULER LES NOUVEAUX SCORES (même logique que local)
-      final updatedScores = {
-        winnerId!: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
-        loserId!: 0
-      };
+    if (_isOnlineGame && _gameId != null) {
+      final winnerId = _myPlayerColor == 'bleu' 
+          ? widget.existingGame!.player2Id 
+          : widget.existingGame!.player1Id;
+      final loserId = _myPlayerColor == 'bleu' 
+          ? widget.existingGame!.player1Id 
+          : widget.existingGame!.player2Id;
       
-      print('🎯 Mise à jour scores abandon - Gagnant: ${updatedScores[winnerId]}, Perdant: ${updatedScores[loserId]}');
-      
-      // 2. METTRE À JOUR LES SCORES DANS FIRESTORE
-      await GameService.updateGameScores(_gameId!, updatedScores);
-      
-      // 3. MAINTENANT TERMINER LA PARTIE
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-      
-      print('✅ Abandon traité avec succès');
-      
-    } catch (e) {
-      print('❌ Erreur lors de l\'abandon: $e');
-      // Fallback: terminer la partie même si la mise à jour des scores échoue
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-    }
-    
-  } else {
-    // Logique locale inchangée
-    setState(() {
-      isGameFinished = true;
-      _cancelAllTimers();
-      final lostPoints = scores[loser] ?? 0;
-      scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
-      scores[loser] = 0;
-    });
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_resultModalShown) {
-        _showResultModal();
+      try {
+        // 1. CALCULER LES NOUVEAUX SCORES (même logique que local)
+        final updatedScores = {
+          winnerId!: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
+          loserId!: 0
+        };
+        
+        print('🎯 Mise à jour scores abandon - Gagnant: ${updatedScores[winnerId]}, Perdant: ${updatedScores[loserId]}');
+        
+        // 2. METTRE À JOUR LES SCORES DANS FIRESTORE
+        await GameService.updateGameScores(_gameId!, updatedScores);
+        
+        // 3. MAINTENANT TERMINER LA PARTIE
+        await GameService.finishGameWithReason(
+          _gameId!,
+          winnerId: winnerId,
+          endReason: GameEndReason.playerSurrendered
+        );
+        
+        print('✅ Abandon traité avec succès');
+        
+      } catch (e) {
+        print('❌ Erreur lors de l\'abandon: $e');
+        // Fallback: terminer la partie même si la mise à jour des scores échoue
+        await GameService.finishGameWithReason(
+          _gameId!,
+          winnerId: winnerId,
+          endReason: GameEndReason.playerSurrendered
+        );
       }
-    });
+      
+    } else {
+      // Logique locale inchangée
+      setState(() {
+        isGameFinished = true;
+        _cancelAllTimers();
+        final lostPoints = scores[loser] ?? 0;
+        scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
+        scores[loser] = 0;
+      });
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_resultModalShown) {
+          _showResultModal();
+        }
+      });
+    }
+    GameStartService().exitGame();
   }
-  GameStartService().exitGame();
-}
+
   Widget _buildWinnerStatus() {
     String winner;
     String winnerName;
@@ -1889,9 +2064,112 @@ void _endGameByForfeit() async {
       ),
     );
   }
+
+// 🆕 MÉTHODES POUR LE SYSTÈME DE MESSAGES AVEC SYNCHRONISATION FIREBASE
+void _showQuickMessageModal() {
+  if (!_isOnlineGame || _isSpectator) return;
   
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    barrierColor: Colors.black.withOpacity(0.5),
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.4,
+      maxChildSize: 0.7,
+      builder: (context, scrollController) => _QuickMessageModal(
+        isOnlineGame: _isOnlineGame,
+        onMessageSent: _sendQuickMessage,
+      ),
+    ),
+  );
+}
+
+void _sendQuickMessage(String message) {
+  if (!_isOnlineGame || _gameId == null) return;
+  
+  // Afficher le message localement immédiatement
+  _showMessageOverlay(message, isMyMessage: true);
+  
+  // Envoyer le message à l'adversaire via Firestore
+  GameService.sendQuickMessage(
+    _gameId!,
+    message,
+    _currentUserId!,
+    _currentUserPlayer?.username ?? 'Joueur'
+  );
+}
+
+void _showMessageOverlay(String message, {bool isMyMessage = false}) {
+  // Nettoyer l'overlay précédent s'il existe
+  _messageOverlayEntry?.remove();
+
+  // 🆕 TOUJOURS afficher les messages à droite (côté du joueur)
+  final position = Positioned(
+    top: MediaQuery.of(context).padding.top + 120,
+    right: 16,
+    child: _buildMessageBubble(message, isMyMessage: true), // 🆕 Toujours "myMessage"
+  );
+
+  // Créer un nouvel overlay
+  final overlay = Overlay.of(context);
+  _messageOverlayEntry = OverlayEntry(
+    builder: (context) => position,
+  );
+
+  overlay.insert(_messageOverlayEntry!);
+
+  // Supprimer après 4 secondes
+  Future.delayed(Duration(seconds: 4), () {
+    _messageOverlayEntry?.remove();
+    _messageOverlayEntry = null;
+  });
+}
+
+Widget _buildMessageBubble(String message, {bool isMyMessage = false}) {
+  return Material(
+    color: Colors.transparent,
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Color(0xFF00d4ff).withOpacity(0.9), // 🆕 Toujours bleu (votre couleur)
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Color(0xFF00d4ff)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  );
+}
 
 
+// Écouter les messages entrants de l'adversaire
+void _startListeningToMessages() {
+  if (_gameId == null) return;
+  
+  GameService.getQuickMessages(_gameId!).listen((message) {
+    if (message.isNotEmpty && 
+        message['senderId'] != _currentUserId && 
+        mounted) {
+      // 🆕 Afficher le message de l'adversaire aussi à droite
+      _showMessageOverlay(message['text'], isMyMessage: true);
+    }
+  });
+}
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
