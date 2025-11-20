@@ -1063,15 +1063,6 @@ void _initializeGameData() async {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    isDraw ? 'MATCH NUL !' : 'VICTOIRE !',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
-                    ),
-                  ),
                   if (_isOnlineGame && !isDraw) ...[
                     SizedBox(height: 10),
                     Text(
