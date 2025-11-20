@@ -222,8 +222,8 @@ void _loadOnlineUsers() {
             alignment: Alignment.center,
             children: [
               Container(
-                width: 80,
-                height: 80,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -235,28 +235,40 @@ void _loadOnlineUsers() {
                 ),
               ),
               Container(
-                width: 72,
-                height: 72,
+                width: 80,
+                height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF2d0052),
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
                   ),
+                  border: Border.all(color: Colors.white, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0xFF00d4ff).withOpacity(0.5),
-                      blurRadius: 10,
-                      spreadRadius: 2,
+                      color: Color(0xFF9c27b0).withOpacity(0.5),
+                      blurRadius: 15,
+                      spreadRadius: 3,
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Text(
-                    user.displayAvatar,
-                    style: TextStyle(fontSize: 24),
-                  ),
+                child: ClipOval( // Force le clip circulaire
+                  child: user.avatarUrl != null
+                      ? Image.network(
+                          user.avatarUrl!,
+                          fit: BoxFit.cover,
+                          width: 80,
+                          height: 80,
+                          errorBuilder: (context, error, stackTrace) => 
+                            Icon(Icons.person, size: 30, color: Colors.white),
+                        )
+                      : Image.network(
+                          user.defaultEmoji,
+                          fit: BoxFit.cover,
+                          width: 80,
+                          height: 80,
+                          errorBuilder: (context, error, stackTrace) => 
+                            Icon(Icons.person, size: 30, color: Colors.white),
+                        ),
                 ),
               ),
               Positioned(
@@ -434,17 +446,36 @@ Widget _buildUserGrid(List<Player> users) {
                       height: 90,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF2d0052),
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 3,
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
                         ),
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFF9c27b0).withOpacity(0.5),
+                            blurRadius: 15,
+                            spreadRadius: 3,
+                          ),
+                        ],
                       ),
-                      child: Center(
-                        child: Text(
-                          user.displayAvatar,
-                          style: TextStyle(fontSize: 30),
-                        ),
+                      child: ClipOval( // Force le clip circulaire
+                        child: user.avatarUrl != null
+                            ? Image.network(
+                                user.avatarUrl!,
+                                fit: BoxFit.cover,
+                                width: 90,
+                                height: 90,
+                                errorBuilder: (context, error, stackTrace) => 
+                                  Icon(Icons.person, size: 30, color: Colors.white),
+                              )
+                            : Image.network(
+                                user.defaultEmoji,
+                                fit: BoxFit.cover,
+                                width: 90,
+                                height: 90,
+                                errorBuilder: (context, error, stackTrace) => 
+                                  Icon(Icons.person, size: 30, color: Colors.white),
+                              ),
                       ),
                     ),
                     Positioned(

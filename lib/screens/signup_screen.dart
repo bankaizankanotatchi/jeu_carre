@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:jeu_carre/screens/login_screen.dart';
 import 'package:jeu_carre/services/minio_storage_service.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
@@ -29,17 +28,10 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   final MinioStorageService _minioStorage = MinioStorageService();
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
-  // Avant de créer le profil, vérifier que MinIO est healthy
-  Future<void> _checkMinioHealth() async {
-    final bool isHealthy = await _minioStorage.checkHealth();
-    if (!isHealthy) {
-      throw Exception('MinIO storage n\'est pas disponible');
-    }
-  }
+
 
   @override
   void initState() {
@@ -48,10 +40,7 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _initializeGoogleSignIn() async {
-    // Initialiser GoogleSignIn avec les client IDs
     await _googleSignIn.initialize();
-    
-    // Démarrer l'authentification légère
     _googleSignIn.attemptLightweightAuthentication();
   }
 
@@ -82,40 +71,28 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Future<String?> _uploadImage(File image, String userId) async {
+  // NOUVELLE MÉTHODE : Upload vers MinIO
+  Future<String?> _uploadImageToMinio(File image, String userId) async {
     try {
-      final Reference storageRef = _storage.ref().child('user_avatars/$userId.jpg');
-      final UploadTask uploadTask = storageRef.putFile(image);
-      final TaskSnapshot snapshot = await uploadTask;
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl;
+      
+      // Uploader l'image vers MinIO
+      final String imageUrl = await _minioStorage.uploadUserAvatar(image, userId);
+      print('✅ Avatar uploadé avec succès vers MinIO: $imageUrl');
+      return imageUrl;
     } catch (e) {
-      print('Erreur upload image: $e');
+      print('❌ Erreur upload avatar MinIO: $e');
+      // Si MinIO échoue, on peut utiliser une image par défaut ou null
       return null;
     }
   }
 
   Future<void> _createPlayerProfile(User user, String username, String? avatarUrl) async {
-    // // Vérifier la santé de MinIO
-    // await _checkMinioHealth();
-
-    // String? finalAvatarUrl = avatarUrl;
-    // if (_selectedImage != null) {
-    //   try {
-    //     finalAvatarUrl = await _minioStorage.uploadUserAvatar(_selectedImage!, user.uid);
-    //     print('Avatar uploadé avec succès: $finalAvatarUrl');
-    //   } catch (e) {
-    //     print('Erreur upload avatar, utilisation avatar par défaut: $e');
-    //     // Continuer sans avatar
-    //   }
-    // }
-
     final player = Player(
       id: user.uid,
       username: username,
       email: user.email ?? '',
       avatarUrl: avatarUrl, // URL MinIO maintenant
-      defaultEmoji: '😊',
+      defaultEmoji: 'https://minio.f2mb.xyz/shikaku/user_avatars/profil_par_defaut.jpg',
       role: UserRole.player,
       totalPoints: 0,
       gamesPlayed: 0,
@@ -144,61 +121,56 @@ class _SignupScreenState extends State<SignupScreen> {
     await _firestore.collection('users').doc(user.uid).set(player.toMap());
   }
   
-Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) async {
-  try {
-    // Récupérer l'authentification via la nouvelle méthode
-    final GoogleSignInAuthentication? googleAuth = await googleUser.authentication;
-    
-    if (googleAuth == null || googleAuth.idToken == null) {
-      throw Exception('Authentication Google échouée - tokens manquants');
-    }
-    
-    // NOUVELLE API : utiliser les getters corrects
-    final credential = GoogleAuthProvider.credential(
-      idToken: googleAuth.idToken,
-    );
-
-    // Connexion à Firebase
-    final UserCredential userCredential = await _auth.signInWithCredential(credential);
-    final User? user = userCredential.user;
-
-    if (user != null) {
-      // Vérifier si le joueur existe déjà
-      final playerDoc = await _firestore.collection('users').doc(user.uid).get();
+  Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) async {
+    try {
+      final GoogleSignInAuthentication? googleAuth = await googleUser.authentication;
       
-      if (!playerDoc.exists) {
-        // Nouveau joueur - créer le profil avec le nom choisi
-        String? avatarUrl;
-        if (_selectedImage != null) {
-          avatarUrl = await _uploadImage(_selectedImage!, user.uid);
-        } else {
-          // Optionnel : utiliser la photo Google si pas de photo sélectionnée
-          final photoUrl = googleUser.photoUrl;
-          if (photoUrl != null) {
-            avatarUrl = photoUrl;
+      if (googleAuth == null || googleAuth.idToken == null) {
+        throw Exception('Authentication Google échouée - tokens manquants');
+      }
+      
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        final playerDoc = await _firestore.collection('users').doc(user.uid).get();
+        
+        if (!playerDoc.exists) {
+          // NOUVEAU : Upload vers MinIO si image sélectionnée
+          String? avatarUrl;
+          if (_selectedImage != null) {
+            avatarUrl = await _uploadImageToMinio(_selectedImage!, user.uid);
+          } else {
+            // Optionnel : utiliser la photo Google si pas de photo sélectionnée
+            final photoUrl = googleUser.photoUrl;
+            if (photoUrl != null) {
+              avatarUrl = photoUrl;
+            }
           }
+
+          await _createPlayerProfile(user, username, avatarUrl);
+        } else {
+          // Joueur existant - mettre à jour le statut
+          await _firestore.collection('users').doc(user.uid).update({
+            'isOnline': true,
+            'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
+          });
         }
 
-        await _createPlayerProfile(user, username, avatarUrl);
-      } else {
-        // Joueur existant - mettre à jour le statut
-        await _firestore.collection('users').doc(user.uid).update({
-          'isOnline': true,
-          'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
-        });
+        _completeSignup();
       }
-
-      _completeSignup();
+    } catch (e) {
+      throw Exception('Erreur traitement utilisateur Google: $e');
     }
-  } catch (e) {
-    throw Exception('Erreur traitement utilisateur Google: $e');
   }
-}
 
   Future<void> _signUpWithGoogle() async {
     final username = _usernameController.text.trim();
     
-    // VÉRIFIER QUE LE NOM EST SAISI
     if (username.isEmpty) {
       _showError('Veuillez entrer un nom de joueur');
       return;
@@ -209,7 +181,6 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
       return;
     }
 
-    // VÉRIFIER L'UNICITÉ DU NOM
     setState(() => _isLoading = true);
     final bool isUnique = await _isUsernameUnique(username);
     
@@ -237,7 +208,6 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
     }
   }
 
-  // Nouvelle méthode pour vérifier l'unicité du nom
   Future<bool> _isUsernameUnique(String username) async {
     try {
       final querySnapshot = await _firestore
@@ -253,7 +223,7 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
     }
   }
 
-  // Modifier _signUpWithEmail pour inclure la vérification
+  // MODIFIÉ : Utiliser MinIO pour l'upload d'image
   Future<void> _signUpWithEmail() async {
     final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
@@ -269,7 +239,6 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
       return;
     }
 
-    // VÉRIFIER L'UNICITÉ DU NOM
     setState(() => _isLoading = true);
     final bool isUnique = await _isUsernameUnique(username);
     setState(() => _isLoading = false);
@@ -292,7 +261,6 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
     setState(() => _isLoading = true);
     
     try {
-      // Créer le joueur avec email/mot de passe
       final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -301,13 +269,15 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
       final User? user = userCredential.user;
       
       if (user != null) {
-        // Uploader l'image si sélectionnée
+        // MODIFIÉ : Upload vers MinIO au lieu de Firebase Storage
         String? avatarUrl;
         if (_selectedImage != null) {
-          avatarUrl = await _uploadImage(_selectedImage!, user.uid);
+          avatarUrl = await _uploadImageToMinio(_selectedImage!, user.uid);
+          print('✅ Avatar uploadé vers MinIO: $avatarUrl');
+        } else {
+          print('ℹ️ Aucune image sélectionnée, utilisation avatar par défaut');
         }
 
-        // Créer le profil joueur
         await _createPlayerProfile(user, username, avatarUrl);
         _completeSignup();
       }
@@ -329,10 +299,7 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
   }
 
   void _completeSignup() {
-    // Marquer l'inscription comme terminée
     PreferencesService.setFirstLaunchCompleted();
-    
-    // Rediriger vers l'écran principal
     Navigator.pushReplacementNamed(context, '/home');
   }
 
@@ -616,6 +583,7 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
       ),
     );
   }
+
   Widget _buildGoogleSignInButton() {
     return Container(
       height: 60,
@@ -674,7 +642,7 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
     );
   }
 
-    Widget _buildLoginButton() {
+  Widget _buildLoginButton() {
     return Container(
       height: 55,
       decoration: BoxDecoration(
@@ -776,14 +744,13 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
       backgroundColor: const Color(0xFF0a0015),
       body: Stack(
         children: [
-          // Particules animées en arrière-plan
           ...List.generate(8, (index) => _buildAnimatedParticle(index)),
           
           SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                const SizedBox(height: 80),
+                const SizedBox(height: 30),
                 
                 // Titre
                 Column(
@@ -833,16 +800,11 @@ Future<void> _handleGoogleUser(GoogleSignInAccount googleUser, String username) 
                 // Champ nom d'utilisateur
                 _buildUsernameField(),
                 
-                // Champs email et mot de passe (pour inscription email)
+                // Champs email et mot de passe
                 _buildEmailField(),
                 _buildPasswordField(),
                 
                 const SizedBox(height: 30),
-                
-                // Bouton Google
-                // _buildGoogleSignInButton(),
-                
-                // const SizedBox(height: 20),
                 
                 // Séparateur
                 Row(

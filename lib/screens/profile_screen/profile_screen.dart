@@ -6,6 +6,9 @@ import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/services/game_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:jeu_carre/services/minio_storage_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +21,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late TabController _tabController;
   Player? _currentPlayer;
   bool _isLoading = true;
+  final ImagePicker _imagePicker = ImagePicker();
+  final MinioStorageService _minioStorage = MinioStorageService();
+  bool _isUpdatingAvatar = false;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -40,6 +46,59 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _tabController = TabController(length: 3, vsync: this);
     _loadCurrentPlayer();
   }
+
+  Future<void> _updateAvatar() async {
+  try {
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 500,
+      maxHeight: 500,
+      imageQuality: 80,
+    );
+    
+    if (image != null && _currentPlayer != null) {
+      setState(() => _isUpdatingAvatar = true);
+      
+      final File imageFile = File(image.path);
+      
+      // Upload vers MinIO
+      final String newAvatarUrl = await _minioStorage.updateUserAvatar(
+        imageFile, 
+        _currentPlayer!.id
+      );
+      
+      // Mettre à jour le profil dans Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentPlayer!.id)
+          .update({
+            'avatarUrl': newAvatarUrl,
+          });
+      
+      // Mettre à jour l'état local
+      setState(() {
+        _currentPlayer = _currentPlayer!.copyWith(avatarUrl: newAvatarUrl);
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Photo de profil mise à jour !'),
+          backgroundColor: Color(0xFF00d4ff),
+        ),
+      );
+    }
+  } catch (e) {
+    print('Erreur mise à jour avatar: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erreur lors de la mise à jour de la photo'),
+        backgroundColor: Color(0xFFff006e),
+      ),
+    );
+  } finally {
+    setState(() => _isUpdatingAvatar = false);
+  }
+}
 
   Future<void> _loadCurrentPlayer() async {
     try {
@@ -811,14 +870,13 @@ Widget _buildGameHistoryItem(Game game, int index) {
                     
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                        Container(
+                      Stack(
+                        children: [
+                          Container(
                             width: 80,
                             height: 80,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-                              ),
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
@@ -827,14 +885,64 @@ Widget _buildGameHistoryItem(Game game, int index) {
                                   spreadRadius: 3,
                                 ),
                               ],
+                              image: _currentPlayer!.avatarUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(_currentPlayer!.avatarUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : DecorationImage(
+                                      image: NetworkImage(_currentPlayer!.defaultEmoji),
+                                      fit: BoxFit.cover,
+                                    ),
                             ),
-                            child: Center(
-                              child: Text(
-                                _currentPlayer!.displayAvatar,
-                                style: TextStyle(fontSize: 30),
+                            child: _currentPlayer!.avatarUrl == null && _currentPlayer!.defaultEmoji.isEmpty
+                                ? Icon(Icons.person, size: 30, color: Colors.white)
+                                : null,
+                          ),
+                          
+                          // Bouton crayon en bas à droite
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _isUpdatingAvatar ? null : _updateAvatar,
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF00d4ff),
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Color(0xFF00d4ff).withOpacity(0.5),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                                child: _isUpdatingAvatar
+                                    ? Center(
+                                        child: SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.edit,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
                               ),
                             ),
                           ),
+                        ],
+                      ),
+
                         SizedBox(height: 8),
                   
                         Text(

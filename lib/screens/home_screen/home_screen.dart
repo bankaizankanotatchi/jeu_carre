@@ -737,11 +737,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   else
                     Column(
                       children: [
-                        _buildRankingSection('DU JOUR', _dailyRanking, Color(0xFF00d4ff)),
+                        _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
                         SizedBox(height: 40),
-                        _buildRankingSection('DE LA SEMAINE', _weeklyRanking, Color(0xFFe040fb)),
+                        _buildRankingSection('Meilleurs joueurs de la semaine', _weeklyRanking, Color(0xFFe040fb)),
                         SizedBox(height: 40),
-                        _buildRankingSection('DU MOIS', _monthlyRanking, Color(0xFFFFD700)),
+                        _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking, Color(0xFFFFD700)),
                       ],
                     ),
                   
@@ -810,11 +810,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildLoadingRankings() {
     return Column(
       children: [
-        _buildRankingSectionShimmer('DU JOUR', Color(0xFF00d4ff)),
+        _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
         SizedBox(height: 40),
-        _buildRankingSectionShimmer('DE LA SEMAINE', Color(0xFFe040fb)),
+        _buildRankingSectionShimmer('Meilleurs joueurs de la semaine', Color(0xFFe040fb)),
         SizedBox(height: 40),
-        _buildRankingSectionShimmer('DU MOIS', Color(0xFFFFD700)),
+        _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFFFD700)),
       ],
     );
   }
@@ -885,12 +885,12 @@ Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Co
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 24),
+        padding: EdgeInsets.symmetric(horizontal: 18),
         child: Text(
           title,
           style: TextStyle(
             color: color,
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
           ),
@@ -988,11 +988,13 @@ Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Co
                               width: 3,
                             ),
                           ),
-                          child: Center(
-                            child: Text(
-                              player['avatar'],
-                              style: TextStyle(fontSize: 24),
-                            ),
+                          child: ClipOval(
+                            child: Image.network(
+                                    player['avatar'],
+                                    fit: BoxFit.cover,
+                                    width: 75,
+                                    height: 75,
+                                  ),
                           ),
                         ),
                         Positioned(

@@ -160,26 +160,27 @@ class _FeedbackNotificationState extends State<FeedbackNotification>
             child: Row(
               children: [
                 // Avatar du joueur
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                    ),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      player.displayAvatar,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+                                                                    Container(
+  width: 50,
+  height: 50,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+    ),
+    border: Border.all(color: Colors.white, width: 2),
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child:Image.network(
+          player.displayAvatar,
+            fit: BoxFit.cover,
+            width: 50,
+            height: 50,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+  ),
+),
                 
                 const SizedBox(width: 12),
                 

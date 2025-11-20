@@ -53,12 +53,36 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
     }
   }
 
-  // Getters simples pour accéder aux données
-  String get _displayUsername => _opponentPlayer?.username ?? widget.opponent['username'] ?? 'Joueur';
-  String get _displayAvatar => _opponentPlayer?.displayAvatar ?? widget.opponent['avatar'] ?? '👤';
-  int get _displayScore => _opponentPlayer?.totalPoints ?? widget.opponent['score'] ?? 0;
-  bool get _isOnline => _opponentPlayer?.isOnline ?? widget.opponent['isOnline'] ?? false;
-  bool get _inGame => _opponentPlayer?.inGame ?? widget.opponent['inGame'] ?? false;
+  // Getters avec gestion null-safe améliorée
+  String get _displayUsername {
+    if (_opponentPlayer?.username != null) {
+      return _opponentPlayer!.username!;
+    }
+    if (widget.opponent['username'] != null) {
+      return widget.opponent['username'] as String;
+    }
+    return 'Joueur';
+  }
+
+  String get _displayAvatar {
+    // Essayer d'abord l'avatar du player
+    if (_opponentPlayer?.displayAvatar != null) {
+      return _opponentPlayer!.displayAvatar!;
+    }
+    // Ensuite essayer avatarUrl de l'opponent
+    if (widget.opponent['avatarUrl'] != null) {
+      return widget.opponent['avatarUrl'] as String;
+    }
+    // Ensuite essayer defaultEmoji
+    if (widget.opponent['defaultEmoji'] != null) {
+      return widget.opponent['defaultEmoji'] as String;
+    }
+    // Fallback par défaut
+    return 'https://via.placeholder.com/80?text=J'; // ou une image par défaut
+  }
+
+  int get _displayScore => _opponentPlayer?.totalPoints ?? (widget.opponent['score'] as int?) ?? 0;
+  bool get _inGame => _opponentPlayer?.inGame ?? (widget.opponent['inGame'] as bool?) ?? false;
   double get _winRate => _opponentPlayer?.winRate ?? 0.0;
   int get _gamesPlayed => _opponentPlayer?.gamesPlayed ?? 0;
   int get _gamesWon => _opponentPlayer?.gamesWon ?? 0;
@@ -534,49 +558,59 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                     ),
                     Column(
                       children: [
-                    
-                          Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-                                ),
-                                border: Border.all(color: Colors.white, width: 3),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color(0xFF9c27b0).withOpacity(0.5),
-                                    blurRadius: 15,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  _displayAvatar,
-                                  style: TextStyle(fontSize: 30),
-                                ),
-                              ),
-                            ),
-                          SizedBox(height: 4),
-                            Text(
-                                    _displayUsername,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  SizedBox(height: 1),
-                                  Text(
-                                    '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                           ],
+                       Container(
+  width: 80,
+  height: 80,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+    ),
+    border: Border.all(color: Colors.white, width: 3),
+    boxShadow: [
+      BoxShadow(
+        color: Color(0xFF9c27b0).withOpacity(0.5),
+        blurRadius: 15,
+        spreadRadius: 3,
+      ),
+    ],
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child: _displayAvatar.startsWith('http')
+        ? Image.network(
+            _displayAvatar,
+            fit: BoxFit.cover,
+            width: 80,
+            height: 80,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 30, color: Colors.white),
+          )
+        : Center(
+            child: Text(
+              _displayAvatar,
+              style: TextStyle(fontSize: 30),
+            ),
+          ),
+  ),
+),
+                        SizedBox(height: 4),
+                        Text(
+                          _displayUsername,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 1),
+                        Text(
+                          '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -670,7 +704,7 @@ class WinRatePainter extends CustomPainter {
     final winPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.butt
+      ..strokeCap= StrokeCap.butt
       ..color = Color(0xFF00d4ff);
 
     double currentStart = startAngleBase;

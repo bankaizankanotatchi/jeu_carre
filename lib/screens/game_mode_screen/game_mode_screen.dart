@@ -174,22 +174,33 @@ void _showChallengeSentDialog() {
               // Avatar de l'adversaire si disponible
               if (widget.opponent != null)
                 Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                    ),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      widget.opponent!.displayAvatar,
-                      style: TextStyle(fontSize: 30),
-                    ),
-                  ),
-                )
+  width: 80,
+  height: 80,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+    ),
+    border: Border.all(color: Colors.white, width: 3),
+    boxShadow: [
+      BoxShadow(
+        color: Color(0xFF9c27b0).withOpacity(0.5),
+        blurRadius: 15,
+        spreadRadius: 3,
+      ),
+    ],
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child:Image.network(
+            widget.opponent!.displayAvatar,
+            fit: BoxFit.cover,
+            width: 80,
+            height: 80,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+  ),
+)
               else
                 Container(
                   width: 80,

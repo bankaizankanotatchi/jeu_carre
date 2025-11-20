@@ -198,16 +198,19 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
-                              colors: game.isAgainstAI 
-                                ? [Color(0xFFff006e), Color(0xFFc4005a)]
-                                : [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                              colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
                             ),
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: Center(
-                            child: Text(
-                              game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                          child: ClipOval( // Force le clip circulaire
+                            child:Image.network(
+                                  game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                    fit: BoxFit.cover,
+                                    width: 40,
+                                    height: 40,
+                                    errorBuilder: (context, error, stackTrace) => 
+                                      Icon(Icons.person, size: 20, color: Colors.white),
+                                  )
                           ),
                         ),
                         SizedBox(width: 12),
@@ -317,24 +320,27 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                       
                       Column(
                         children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: game.isAgainstAI 
-                                  ? [Color(0xFFff006e), Color(0xFFc4005a)]
-                                  : [Color(0xFFe040fb), Color(0xFF9c27b0)],
-                              ),
+                        Container(
+                          width:32,
+                          height:32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
                             ),
-                            child: Center(
-                              child: Text(
-                                game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                                style: TextStyle(fontSize: 14),
-                              ),
-                            ),
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
+                          child: ClipOval( // Force le clip circulaire
+                            child:Image.network(
+                                  game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                    fit: BoxFit.cover,
+                                    width:32,
+                                    height:32,
+                                    errorBuilder: (context, error, stackTrace) => 
+                                      Icon(Icons.person, size: 20, color: Colors.white),
+                                  )
+                          ),
+                        ),
                           SizedBox(height: 8),
                           Text(
                             '$opponentScore',
@@ -434,7 +440,6 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                       children: [
                         _buildPlayerInfo(
                           player1, 
-                          'Joueur 1', 
                           [Color(0xFF00d4ff), Color(0xFF0099cc)]
                         ),
                         
@@ -456,7 +461,6 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                         
                         _buildPlayerInfo(
                           player2, 
-                          'Joueur 2', 
                           [Color(0xFFe040fb), Color(0xFF9c27b0)],
                           isRight: true
                         ),
@@ -585,26 +589,33 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildPlayerInfo(Player? player, String defaultName, List<Color> colors, {bool isRight = false}) {
+  Widget _buildPlayerInfo(Player? player, List<Color> colors, {bool isRight = false}) {
     return Expanded(
       child: Row(
         mainAxisAlignment: isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isRight) ...[
             Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: colors),
-              ),
-              child: Center(
-                child: Text(
-                  player?.displayAvatar ?? '👤',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ),
-            ),
+  width: 35,
+  height: 35,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+    ),
+    border: Border.all(color: Colors.white, width: 2),
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child:Image.network(
+          player?.displayAvatar ?? '👤',
+            fit: BoxFit.cover,
+            width: 35,
+            height: 35,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+  ),
+),
             SizedBox(width: 8),
           ],
           Expanded(
@@ -612,7 +623,7 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
               crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Text(
-                  _truncateName(player?.username ?? defaultName),
+                  _truncateName(player?.username ?? 'Joueur'),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -620,32 +631,32 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                Text(
-                  defaultName,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 10,
-                  ),
-                ),
               ],
             ),
           ),
           if (isRight) ...[
             SizedBox(width: 8),
             Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: colors),
-              ),
-              child: Center(
-                child: Text(
-                  player?.displayAvatar ?? '👤',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ),
-            ),
+  width: 35,
+  height: 35,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+    ),
+    border: Border.all(color: Colors.white, width: 2),
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child:Image.network(
+          player?.displayAvatar ?? '👤',
+            fit: BoxFit.cover,
+            width: 35,
+            height: 35,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+  ),
+),
           ],
         ],
       ),

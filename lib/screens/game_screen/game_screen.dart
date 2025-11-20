@@ -57,14 +57,14 @@ class __QuickMessageModalState extends State<_QuickMessageModal>
     {'text': '😢', 'type': 'emoji'},
     {'text': '😠', 'type': 'emoji'},
     {'text': '👍', 'type': 'emoji'},
+    {'text': 'Ekieee!!', 'type': 'text'},
+    {'text': 'tu es faible😂', 'type': 'text'},
     {'text': 'C\'est ton tour!', 'type': 'text'},
     {'text': 'Belle partie!', 'type': 'text'},
     {'text': 'Mais joue!', 'type': 'text'},
     {'text': 'Joue bien!', 'type': 'text'},
     {'text': 'Stp joue', 'type': 'text'},
     {'text': 'Bien joué!', 'type': 'text'},
-    {'text': 'Oops!', 'type': 'text'},
-    {'text': 'Bravo!', 'type': 'text'},
   ];
 
   @override
@@ -112,95 +112,99 @@ class __QuickMessageModalState extends State<_QuickMessageModal>
       position: _slideAnimation,
       child: Container(
         margin: EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header du modal
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Color(0xFF2d0052),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border.all(color: Color(0xFF9c27b0)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Messages Rapides',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.close, color: Colors.white, size: 20),
-                    onPressed: _closeModal,
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints.tightFor(width: 32, height: 32),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Contenu des messages
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Color(0xFF1a0033),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-                border: Border(
-                  left: BorderSide(color: Color(0xFF9c27b0)),
-                  right: BorderSide(color: Color(0xFF9c27b0)),
-                  bottom: BorderSide(color: Color(0xFF9c27b0)),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header du modal
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFF2d0052),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: Color(0xFF9c27b0)),
                 ),
-              ),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 1.2,
-                ),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final message = _messages[index];
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _sendMessage(message['text']),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Color(0xFF2d0052),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Color(0xFF4a0080)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            message['text'],
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: message['type'] == 'emoji' ? 20 : 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                child: Row(
+                  children: [
+                    Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Messages Rapides',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  );
-                },
+                    Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white, size: 20),
+                      onPressed: _closeModal,
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints.tightFor(width: 32, height: 32),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              
+              // Contenu des messages
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFF1a0033),
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                  border: Border(
+                    left: BorderSide(color: Color(0xFF9c27b0)),
+                    right: BorderSide(color: Color(0xFF9c27b0)),
+                    bottom: BorderSide(color: Color(0xFF9c27b0)),
+                  ),
+                ),
+                child: SingleChildScrollView(
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      childAspectRatio: 1.2,
+                    ),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _sendMessage(message['text']),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Color(0xFF2d0052),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Color(0xFF4a0080)),
+                            ),
+                            child: Center(
+                              child: Text(
+                                message['text'],
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: message['type'] == 'emoji' ? 20 : 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -216,6 +220,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _resultModalShown = false;
   bool _isSpectator = false;
   OverlayEntry? _messageOverlayEntry;
+
+  bool _isPlayerOnLeft(String playerId) {
+    if (!_isOnlineGame) return playerId == 'bleu';
+    
+    // Si je suis le joueur bleu, je suis à gauche
+    if (_myPlayerColor == 'bleu') {
+      return playerId == _currentUserId;
+    } else {
+      // Si je suis le joueur rouge, l'adversaire (bleu) est à gauche
+      return playerId != _currentUserId;
+    }
+  }
 
   void _checkUserStatus() {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -346,63 +362,62 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
     
-  void _initializeGameData() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
-    }
+void _initializeGameData() async {
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null) {
+    _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
+  }
 
-    if (widget.existingGame != null && !widget.isAgainstAI) {
-      _isOnlineGame = true;
-      _gameId = widget.existingGame!.id;
+  if (widget.existingGame != null && !widget.isAgainstAI) {
+    _isOnlineGame = true;
+    _gameId = widget.existingGame!.id;
+    
+    // Vérifier si l'utilisateur est un joueur ou spectateur
+    final isPlayer = widget.existingGame!.players.contains(currentUser!.uid);
+    _isSpectator = !isPlayer;
+    
+    if (isPlayer) {
+      // Logique existante pour les joueurs
+      if (widget.existingGame!.player1Id == _currentUserId) {
+        _myPlayerColor = 'bleu';
+      } else if (widget.existingGame!.player2Id == _currentUserId) {
+        _myPlayerColor = 'rouge';
+      }
       
-      // Vérifier si l'utilisateur est un joueur ou spectateur
-      final isPlayer = widget.existingGame!.players.contains(currentUser!.uid);
-      _isSpectator = !isPlayer;
+      // Charger les deux joueurs pour avoir leurs avatars
+      final opponentId = _myPlayerColor == 'bleu' 
+          ? widget.existingGame!.player2Id 
+          : widget.existingGame!.player1Id;
       
-      if (isPlayer) {
-        // Logique existante pour les joueurs
-        if (widget.existingGame!.player1Id == _currentUserId) {
-          _myPlayerColor = 'bleu';
-        } else if (widget.existingGame!.player2Id == _currentUserId) {
-          _myPlayerColor = 'rouge';
-        }
-        
-        final opponentId = _myPlayerColor == 'bleu' 
-            ? widget.existingGame!.player2Id 
-            : widget.existingGame!.player1Id;
-        
-        if (opponentId != null) {
-          _opponentPlayer = await GameService.getPlayer(opponentId);
-        }
+      if (opponentId != null) {
+        _opponentPlayer = await GameService.getPlayer(opponentId);
+      }
+      
       // 🆕 Démarrer l'écoute des messages
       _startListeningToMessages();
         
-      } else {
-        // Logique pour les spectateurs
-        print('👀 Initialisation en mode spectateur');
-        
-        // 🎯 IMPORTANT : Les spectateurs doivent aussi charger les infos des joueurs
-        if (widget.existingGame!.player1Id != null) {
-          _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
-        }
-        if (widget.existingGame!.player2Id != null && _opponentPlayer == null) {
-          _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
-        }
-        
-        _joinAsSpectator();
+    } else {
+      // Logique pour les spectateurs - charger les deux joueurs
+      print('👀 Initialisation en mode spectateur');
+      
+      if (widget.existingGame!.player1Id != null) {
+        _currentUserPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
+      }
+      if (widget.existingGame!.player2Id != null) {
+        _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
       }
       
-      // 🎯 TOUS LES UTILISATEURS (JOUEURS ET SPECTATEURS) DOIVENT ÉCOUTER LES MISE À JOUR
-      _startListeningToGameUpdates();
-      _loadSpectators();
-    } else if (widget.opponentId != null) {
-      _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
+      _joinAsSpectator();
     }
-
-    setState(() {});
+    
+    _startListeningToGameUpdates();
+    _loadSpectators();
+  } else if (widget.opponentId != null) {
+    _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
   }
 
+  setState(() {});
+}
   void _initializeTimers() {
     if (_timerInitialized) return;
     
@@ -1209,42 +1224,72 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildWinnerProfile(String player, String playerName) {
-    final color = _getPlayerColor(player);
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
-            ),
-            border: Border.all(color: color, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.5),
-                blurRadius: 15,
-                spreadRadius: 3,
-              ),
-            ],
-          ),
-          child: Icon(Icons.person, color: Colors.white, size: 40),
-        ),
-        SizedBox(height: 12),
-        Text(
-          playerName.toUpperCase(),
-          style: TextStyle(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-          ),
-        ),
-      ],
-    );
+Widget _buildWinnerProfile(String player, String playerName) {
+  final color = _getPlayerColor(player);
+  
+  // Récupérer les données du joueur gagnant
+  Player? winnerPlayer;
+  if (_isOnlineGame) {
+    if (player == 'bleu') {
+      winnerPlayer = _myPlayerColor == 'bleu' ? _currentUserPlayer : _opponentPlayer;
+    } else {
+      winnerPlayer = _myPlayerColor == 'rouge' ? _currentUserPlayer : _opponentPlayer;
+    }
   }
+
+  return Column(
+    children: [
+      Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
+          ),
+          border: Border.all(color: color, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.5),
+              blurRadius: 15,
+              spreadRadius: 3,
+            ),
+          ],
+        ),
+        child: _isOnlineGame && winnerPlayer != null
+            ? ClipOval(
+                child: Image.network(
+                  winnerPlayer.displayAvatar,
+                  fit: BoxFit.cover,
+                  width: 80,
+                  height: 80,
+                  errorBuilder: (context, error, stackTrace) => 
+                    Icon(Icons.person, color: Colors.white, size: 40),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    );
+                  },
+                ),
+              )
+            : Icon(Icons.person, color: Colors.white, size: 40),
+      ),
+      SizedBox(height: 12),
+      Text(
+        playerName.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.5,
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildDrawProfiles() {
     return Row(
@@ -1256,29 +1301,54 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildDrawProfile(String playerName, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
-            ),
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Icon(Icons.person, color: Colors.white, size: 30),
-        ),
-        SizedBox(height: 8),
-        Text(
-          playerName,
-          style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
+Widget _buildDrawProfile(String playerName, Color color) {
+  // Récupérer les données du joueur
+  Player? playerData;
+  if (_isOnlineGame) {
+    if (playerName == _bluePlayerName) {
+      playerData = _myPlayerColor == 'bleu' ? _currentUserPlayer : _opponentPlayer;
+    } else {
+      playerData = _myPlayerColor == 'rouge' ? _currentUserPlayer : _opponentPlayer;
+    }
   }
+
+  return Column(
+    children: [
+      Container(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
+          ),
+          border: Border.all(color: color, width: 2),
+        ),
+        child: _isOnlineGame && playerData != null
+            ? ClipOval(
+                child: Image.network(
+                  playerData.displayAvatar,
+                  fit: BoxFit.cover,
+                  width: 60,
+                  height: 60,
+                  errorBuilder: (context, error, stackTrace) => 
+                    Icon(Icons.person, color: Colors.white, size: 30),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Icon(Icons.person, color: Colors.white, size: 30);
+                  },
+                ),
+              )
+            : Icon(Icons.person, color: Colors.white, size: 30),
+      ),
+      SizedBox(height: 8),
+      Text(
+        playerName,
+        style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+    ],
+  );
+}
 
   Widget _buildModalScore(String playerName, int score, Color color) {
     return Column(
@@ -1755,48 +1825,87 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildCompactPlayerScore(String player, int score, String playerName) {
-    final isActive = currentPlayer == player && !isGameFinished;
-    final color = _getPlayerColor(player);
+Widget _buildCompactPlayerScore(String player, int score, String playerName) {
+  final isActive = currentPlayer == player && !isGameFinished;
+  final color = _getPlayerColor(player);
 
-    return ScaleTransition(
-      scale: isActive ? _scoreScaleAnimation : AlwaysStoppedAnimation(1.0),
-      child: Column(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
-              ),
-              border: Border.all(color: color, width: isActive ? 2 : 1),
-            ),
-            child: Icon(Icons.person, color: Colors.white, size: 16),
-          ),
-          SizedBox(height: 4),
-          Text(
-            playerName.toUpperCase(),
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            score.toString(),
-            style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
+  // Déterminer si c'est le joueur actuel ou l'adversaire
+  bool isCurrentUser = false;
+  Player? playerData;
+  
+  if (_isOnlineGame) {
+    if (player == 'bleu' && _myPlayerColor == 'bleu') {
+      isCurrentUser = true;
+      playerData = _currentUserPlayer;
+    } else if (player == 'rouge' && _myPlayerColor == 'rouge') {
+      isCurrentUser = true;
+      playerData = _currentUserPlayer;
+    } else {
+      playerData = _opponentPlayer;
+    }
   }
 
+  return ScaleTransition(
+    scale: isActive ? _scoreScaleAnimation : AlwaysStoppedAnimation(1.0),
+    child: Column(
+      children: [
+        // Avatar du joueur
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [color.withOpacity(0.8), color.withOpacity(0.3)],
+            ),
+            border: Border.all(color: color, width: isActive ? 2 : 1),
+            boxShadow: [
+              if (isActive)
+                BoxShadow(
+                  color: color.withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+            ],
+          ),
+          child: _isOnlineGame && playerData != null
+              ? ClipOval(
+                  child: Image.network(
+                    playerData.displayAvatar,
+                    fit: BoxFit.cover,
+                    width: 32,
+                    height: 32,
+                    errorBuilder: (context, error, stackTrace) => 
+                      Icon(Icons.person, color: Colors.white, size: 16),
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Icon(Icons.person, color: Colors.white, size: 16);
+                    },
+                  ),
+                )
+              : Icon(Icons.person, color: Colors.white, size: 16),
+        ),
+        SizedBox(height: 4),
+        Text(
+          playerName.toUpperCase(),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          score.toString(),
+          style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900),
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildSpectatorsSection() {
     return StreamBuilder<List<Player>>(
       stream: _spectatorsStream,
@@ -1852,7 +1961,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                             margin: EdgeInsets.symmetric(horizontal: 4),
                             child: Column(
                               children: [
-                                Container(
+                                  Container(
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
@@ -1860,16 +1969,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                                     gradient: LinearGradient(
                                       colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
                                     ),
-                                    border: Border.all(color: Color(0xFFe040fb), width: 2),
+                                    border: Border.all(color: Colors.white, width: 2),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Color(0xFF9c27b0).withOpacity(0.5),
-                                        blurRadius: 8,
+                                        blurRadius: 15,
+                                        spreadRadius: 3,
                                       ),
                                     ],
                                   ),
-                                  child: Center(
-                                    child: Text(spectator.displayAvatar, style: TextStyle(fontSize: 16)),
+                                  child: ClipOval( // Force le clip circulaire
+                                    child:Image.network(
+                                            spectator.displayAvatar,
+                                            fit: BoxFit.cover,
+                                            width: 40,
+                                            height: 40,
+                                            errorBuilder: (context, error, stackTrace) => 
+                                              Icon(Icons.person, size: 20, color: Colors.white),
+                                          )
                                   ),
                                 ),
                               ],
@@ -2089,10 +2206,9 @@ void _showQuickMessageModal() {
 void _sendQuickMessage(String message) {
   if (!_isOnlineGame || _gameId == null) return;
   
-  // Afficher le message localement immédiatement
-  _showMessageOverlay(message, isMyMessage: true);
+  // ✅ Mon message apparaît de mon côté
+  _showMessageOverlay(message, senderId: _currentUserId!);
   
-  // Envoyer le message à l'adversaire via Firestore
   GameService.sendQuickMessage(
     _gameId!,
     message,
@@ -2101,41 +2217,60 @@ void _sendQuickMessage(String message) {
   );
 }
 
-void _showMessageOverlay(String message, {bool isMyMessage = false}) {
-  // Nettoyer l'overlay précédent s'il existe
+void _startListeningToMessages() {
+  if (_gameId == null) return;
+  
+  GameService.getQuickMessages(_gameId!).listen((message) {
+    if (message.isNotEmpty && 
+        message['senderId'] != _currentUserId && 
+        mounted) {
+      // ✅ Message adverse apparaît de son côté
+      _showMessageOverlay(message['text'], senderId: message['senderId']);
+    }
+  });
+}
+
+void _showMessageOverlay(String message, {required String senderId}) {
   _messageOverlayEntry?.remove();
 
-  // 🆕 TOUJOURS afficher les messages à droite (côté du joueur)
+  final isOnLeft = _isPlayerOnLeft(senderId);
+  final isMyMessage = senderId == _currentUserId;
+
+  // ✅ Position selon le côté du joueur
   final position = Positioned(
     top: MediaQuery.of(context).padding.top + 120,
-    right: 16,
-    child: _buildMessageBubble(message, isMyMessage: true), // 🆕 Toujours "myMessage"
+    left: isOnLeft ? 16 : null,    // Joueur gauche → GAUCHE
+    right: isOnLeft ? null : 16,   // Joueur droit → DROITE
+    child: _buildMessageBubble(message, isOnLeft: isOnLeft, isMyMessage: isMyMessage),
   );
 
-  // Créer un nouvel overlay
   final overlay = Overlay.of(context);
-  _messageOverlayEntry = OverlayEntry(
-    builder: (context) => position,
-  );
-
+  _messageOverlayEntry = OverlayEntry(builder: (context) => position);
   overlay.insert(_messageOverlayEntry!);
 
-  // Supprimer après 4 secondes
   Future.delayed(Duration(seconds: 4), () {
     _messageOverlayEntry?.remove();
     _messageOverlayEntry = null;
   });
 }
 
-Widget _buildMessageBubble(String message, {bool isMyMessage = false}) {
+Widget _buildMessageBubble(String message, {required bool isOnLeft, required bool isMyMessage}) {
+  // ✅ Couleur selon le joueur (bleu/rouge) et non pas "myMessage"
+  final playerColor = isOnLeft ? Color(0xFF00d4ff) : Color(0xFFff006e);
+  
   return Material(
     color: Colors.transparent,
     child: Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Color(0xFF00d4ff).withOpacity(0.9), // 🆕 Toujours bleu (votre couleur)
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Color(0xFF00d4ff)),
+        color: playerColor.withOpacity(0.9),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: isOnLeft ? Radius.circular(4) : Radius.circular(20),
+          bottomRight: isOnLeft ? Radius.circular(20) : Radius.circular(4),
+        ),
+        border: Border.all(color: playerColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -2157,19 +2292,6 @@ Widget _buildMessageBubble(String message, {bool isMyMessage = false}) {
 }
 
 
-// Écouter les messages entrants de l'adversaire
-void _startListeningToMessages() {
-  if (_gameId == null) return;
-  
-  GameService.getQuickMessages(_gameId!).listen((message) {
-    if (message.isNotEmpty && 
-        message['senderId'] != _currentUserId && 
-        mounted) {
-      // 🆕 Afficher le message de l'adversaire aussi à droite
-      _showMessageOverlay(message['text'], isMyMessage: true);
-    }
-  });
-}
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {

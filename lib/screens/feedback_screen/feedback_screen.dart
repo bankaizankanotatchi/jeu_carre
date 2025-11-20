@@ -490,25 +490,43 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isCurrentUser) ...[
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF00d4ff),
-                    Color(0xFF0099cc),
-                  ],
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  message.userDefaultEmoji,
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
+Container(
+  width: 40,
+  height: 40,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+    ),
+    border: Border.all(color: Colors.white, width: 3),
+    boxShadow: [
+      BoxShadow(
+        color: Color(0xFF9c27b0).withOpacity(0.5),
+        blurRadius: 15,
+        spreadRadius: 3,
+      ),
+    ],
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child: message.userAvatarUrl != null
+        ? Image.network(
+            message.userAvatarUrl!,
+            fit: BoxFit.cover,
+            width: 40,
+            height: 40,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+        : Image.network(
+            message.userDefaultEmoji,
+            fit: BoxFit.cover,
+            width: 40,
+            height: 40,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          ),
+  ),
+),
             SizedBox(width: 8),
           ],
           Expanded(
@@ -780,25 +798,43 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           ),
           if (isCurrentUser) ...[
             SizedBox(width: 8),
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFe040fb),
-                    Color(0xFF9c27b0),
-                  ],
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  message.userDefaultEmoji,
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
+Container(
+  width: 40,
+  height: 40,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+    ),
+    border: Border.all(color: Colors.white, width: 3),
+    boxShadow: [
+      BoxShadow(
+        color: Color(0xFF9c27b0).withOpacity(0.5),
+        blurRadius: 15,
+        spreadRadius: 3,
+      ),
+    ],
+  ),
+  child: ClipOval( // Force le clip circulaire
+    child: message.userAvatarUrl != null
+        ? Image.network(
+            message.userAvatarUrl!,
+            fit: BoxFit.cover,
+            width: 40,
+            height: 40,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          )
+        : Image.network(
+            message.userDefaultEmoji,
+            fit: BoxFit.cover,
+            width: 40,
+            height: 40,
+            errorBuilder: (context, error, stackTrace) => 
+              Icon(Icons.person, size: 20, color: Colors.white),
+          ),
+  ),
+),
           ],
         ],
       ),
