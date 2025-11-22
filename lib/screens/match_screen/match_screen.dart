@@ -1,3 +1,4 @@
+// screens/match_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +26,9 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   bool _showReceivedRequests = true;
   Stream<List<dynamic>>? _matchRequestsStream;
   
+  // Caches pour les noms des adversaires
+  final Map<String, String> _opponentNameCache = {};
+  final Map<String, Player?> _playerCache = {};
 
   @override
   void initState() {
@@ -56,6 +60,64 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     _tabController.dispose();
     super.dispose();
   }
+
+  // ============================================================
+  // MÉTHODES DE CACHE
+  // ============================================================
+
+  // Méthode pour récupérer un joueur avec cache
+  Future<Player?> _getPlayerWithCache(String playerId) async {
+    if (_playerCache.containsKey(playerId)) {
+      return _playerCache[playerId];
+    }
+    
+    try {
+      final player = await GameService.getPlayer(playerId);
+      _playerCache[playerId] = player;
+      return player;
+    } catch (e) {
+      _playerCache[playerId] = null;
+      return null;
+    }
+  }
+
+  // Méthode pour obtenir le nom de l'adversaire avec cache
+  Future<String> _getOpponentNameWithCache(Game game) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return 'Adversaire';
+    
+    final opponentId = _getOpponentId(game, currentUserId);
+    final cacheKey = '${game.id}_$opponentId';
+    
+    // Retourner directement si déjà en cache
+    if (_opponentNameCache.containsKey(cacheKey)) {
+      return _opponentNameCache[cacheKey]!;
+    }
+    
+    if (game.isAgainstAI) {
+      final aiName = 'IA ${game.aiDifficulty ?? 'beginner'}';
+      _opponentNameCache[cacheKey] = aiName;
+      return aiName;
+    } else if (opponentId.isNotEmpty) {
+      _opponentNameCache[cacheKey] = 'Chargement...';
+      
+      try {
+        final opponent = await _getPlayerWithCache(opponentId);
+        final opponentName = opponent?.username ?? 'Joueur';
+        _opponentNameCache[cacheKey] = opponentName;
+        return opponentName;
+      } catch (e) {
+        _opponentNameCache[cacheKey] = 'Joueur';
+        return 'Joueur';
+      }
+    } else {
+      return 'Adversaire';
+    }
+  }
+
+  // ============================================================
+  // MÉTHODES DE GESTION DES PARTIES
+  // ============================================================
 
   void _joinAsSpectator(Game game) async {
     try {
@@ -269,259 +331,257 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     );
   }
 
+  Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
+    final isMyRequest = request.fromUserId == _auth.currentUser?.uid;
+    final isExpired = _isRequestExpired(request);
+    final isPending = request.status == MatchRequestStatus.pending && !isExpired;
+    final isRejected = request.status == MatchRequestStatus.declined || isExpired;
+    final isAccepted = request.status == MatchRequestStatus.accepted;
+    final isCancelled = request.status == MatchRequestStatus.cancelled;
+    
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
 
-Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
-  final isMyRequest = request.fromUserId == _auth.currentUser?.uid;
-  final isExpired = _isRequestExpired(request);
-  final isPending = request.status == MatchRequestStatus.pending && !isExpired;
-  final isRejected = request.status == MatchRequestStatus.declined || isExpired;
-  final isAccepted = request.status == MatchRequestStatus.accepted;
-  final isCancelled = request.status == MatchRequestStatus.cancelled;
-  
-  Color statusColor;
-  String statusText;
-  IconData statusIcon;
+    if (isExpired) {
+      statusColor = Color(0xFF666666);
+      statusText = 'EXPIRÉE';
+      statusIcon = Icons.timer_off;
+    } else if (isRejected) {
+      statusColor = Color(0xFFff006e);
+      statusText = 'REFUSÉE';
+      statusIcon = Icons.cancel;
+    } else if (isAccepted) {
+      statusColor = Color(0xFF00d4ff);
+      statusText = 'ACCEPTÉE';
+      statusIcon = Icons.check_circle;
+    } else if (isCancelled) {
+      statusColor = Color(0xFF666666);
+      statusText = 'ANNULÉE';
+      statusIcon = Icons.check_circle;
+    } else {
+      statusColor = Color(0xFFFFD700);
+      statusText = 'EN ATTENTE';
+      statusIcon = Icons.schedule;
+    }
 
-  if (isExpired) {
-    statusColor = Color(0xFF666666);
-    statusText = 'EXPIRÉE';
-    statusIcon = Icons.timer_off;
-  } else if (isRejected) {
-    statusColor = Color(0xFFff006e);
-    statusText = 'REFUSÉE';
-    statusIcon = Icons.cancel;
-  } else if (isAccepted) {
-    statusColor = Color(0xFF00d4ff);
-    statusText = 'ACCEPTÉE';
-    statusIcon = Icons.check_circle;
-  } else if (isCancelled) {
-    statusColor = Color(0xFF666666);
-    statusText = 'ANNULÉE';
-    statusIcon = Icons.check_circle;
-  } else {
-    statusColor = Color(0xFFFFD700);
-    statusText = 'EN ATTENTE';
-    statusIcon = Icons.schedule;
-  }
+    final opponentName = _truncateName(opponent?.username ?? 'Joueur inconnu');
+    final opponentAvatar = opponent?.displayAvatar ?? '👤';
 
-  final opponentName = _truncateName(opponent?.username ?? 'Joueur inconnu');
-  final opponentAvatar = opponent?.displayAvatar ?? '👤';
-
-  return Container(
-    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    decoration: BoxDecoration(
-      color: Color(0xFF1a0033),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: statusColor.withOpacity(0.5),
-        width: 2,
-      ),
-    ),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Color(0xFF1a0033),
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+        border: Border.all(
+          color: statusColor.withOpacity(0.5),
+          width: 2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                            ),
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: ClipOval(
-                          child: Image.network(
-                            opponentAvatar,
-                            fit: BoxFit.cover,
-                            width: 50,
-                            height: 50,
-                            errorBuilder: (context, error, stackTrace) => 
-                              Icon(Icons.person, size: 24, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            opponentName,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                          child: ClipOval(
+                            child: Image.network(
+                              opponentAvatar,
+                              fit: BoxFit.cover,
+                              width: 50,
+                              height: 50,
+                              errorBuilder: (context, error, stackTrace) => 
+                                Icon(Icons.person, size: 24, color: Colors.white),
                             ),
                           ),
+                        ),
+                        SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              opponentName,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              isMyRequest ? 'Vous avez défié' : 'Vous a défié',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.6),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: statusColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(statusIcon, color: statusColor, size: 14),
+                          SizedBox(width: 6),
                           Text(
-                            isMyRequest ? 'Vous avez défié' : 'Vous a défié',
+                            statusText,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 12,
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: statusColor),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(statusIcon, color: statusColor, size: 14),
-                        SizedBox(width: 6),
-                        Text(
-                          statusText,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              
-              SizedBox(height: 16),
-              
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Color(0xFF2d0052),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildConfigItem('Grille', '${request.gridSize}×${request.gridSize}', Icons.grid_on),
-                        _buildConfigItem('Match', '${request.gameDuration ~/ 60} min', Icons.timer),
-                        _buildConfigItem('Tour', '${request.reflexionTime}s', Icons.hourglass_empty),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    if (isPending && !isMyRequest)
-                      Text(
-                        'Temps restant: ${_formatTimeRemaining(request.createdAt)}',
-                        style: TextStyle(
-                          color: Color(0xFFFFD700),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
                   ],
                 ),
-              ),
-              
-              SizedBox(height: 12),
-              
-              // CORRECTION : LOGIQUE D'AFFICHAGE DES BOUTONS SIMPLIFIÉE
-             if(isRejected || isAccepted || isCancelled)
-                Container()
-             else
-                // SI LA DEMANDE EST EN ATTENTE
-                isMyRequest 
-                  ? 
-                  // BOUTON POUR LES DEMANDES QUE VOUS AVEZ ENVOYÉES (ANNULER)
-                  Container(
-                    width: double.infinity,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Color(0xFF1a0033),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Color(0xFFFFD700)),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _cancelMatchRequest(request),
-                        child: Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.cancel, color: Color(0xFFFFD700), size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                'ANNULER LA DEMANDE',
-                                style: TextStyle(
-                                  color: Color(0xFFFFD700),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                  : 
-                  // BOUTONS POUR LES DEMANDES QUE VOUS AVEZ REÇUES (ACCEPTER + REFUSER)
-                  Row(
+                
+                SizedBox(height: 16),
+                
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF2d0052),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Container(
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildConfigItem('Grille', '${request.gridSize}×${request.gridSize}', Icons.grid_on),
+                          _buildConfigItem('Match', '${request.gameDuration ~/ 60} min', Icons.timer),
+                          _buildConfigItem('Tour', '${request.reflexionTime}s', Icons.hourglass_empty),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      if (isPending && !isMyRequest)
+                        Text(
+                          'Temps restant: ${_formatTimeRemaining(request.createdAt)}',
+                          style: TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
+                        ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: 12),
+                
+                if(isRejected || isAccepted || isCancelled)
+                  Container()
+                else
+                  // SI LA DEMANDE EST EN ATTENTE
+                  isMyRequest 
+                    ? 
+                    // BOUTON POUR LES DEMANDES QUE VOUS AVEZ ENVOYÉES (ANNULER)
+                    Container(
+                      width: double.infinity,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF1a0033),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Color(0xFFFFD700)),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _cancelMatchRequest(request),
+                          child: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.cancel, color: Color(0xFFFFD700), size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'ANNULER LA DEMANDE',
+                                  style: TextStyle(
+                                    color: Color(0xFFFFD700),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    : 
+                    // BOUTONS POUR LES DEMANDES QUE VOUS AVEZ REÇUES (ACCEPTER + REFUSER)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                              ),
                               borderRadius: BorderRadius.circular(8),
-                              onTap: () => _acceptMatchRequest(request),
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.check, color: Colors.white, size: 16),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'ACCEPTER',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w900,
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () => _acceptMatchRequest(request),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.check, color: Colors.white, size: 16),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'ACCEPTER',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF1a0033),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Color(0xFFff006e)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Color(0xFF1a0033),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Color(0xFFff006e)),
                           ),
                           child: Material(
                             color: Colors.transparent,
@@ -551,12 +611,12 @@ Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
                       ),
                     ],
                   )],
+            ),
           ),
         ),
       ),
-    ),
-  );
-} 
+    );
+  } 
   
   Widget _buildConfigItem(String title, String value, IconData icon) {
     return Column(
@@ -598,7 +658,7 @@ Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
     return '${name.substring(0, 9)}..';
   }
 
-  Widget _buildMyMatchCard(Game game, Player? opponent) {
+  Widget _buildMyMatchCard(Game game) {
     final currentUserId = _auth.currentUser?.uid;
     final isMyTurn = game.currentPlayer == currentUserId;
     final timeLeft = game.timeRemaining;
@@ -609,231 +669,246 @@ Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
     final myScore = game.scores[currentUserId] ?? 0;
     final opponentScore = opponentId.isNotEmpty ? (game.scores[opponentId] ?? 0) : 0;
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Color(0xFF1a0033),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isMyTurn ? Color(0xFF00d4ff) : Color(0xFF4a0080),
-          width: 2,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _resumeGame(game),
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+    return FutureBuilder<String>(
+      key: Key('my_match_${game.id}'),
+      future: _getOpponentNameWithCache(game),
+      builder: (context, nameSnapshot) {
+        final opponentName = _opponentNameCache.containsKey('${game.id}_$opponentId')
+            ? _opponentNameCache['${game.id}_$opponentId']!
+            : nameSnapshot.data ?? 'Adversaire';
+
+        return FutureBuilder<Player?>(
+          future: opponentId.isNotEmpty ? _getPlayerWithCache(opponentId) : Future.value(null),
+          builder: (context, opponentSnapshot) {
+            final opponent = opponentSnapshot.data;
+
+            return Container(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Color(0xFF1a0033),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isMyTurn ? Color(0xFF00d4ff) : Color(0xFF4a0080),
+                  width: 2,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _resumeGame(game),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                            ),
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                              game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                              fit: BoxFit.cover,
-                              width: 40,
-                              height: 40,
-                              errorBuilder: (context, error, stackTrace) => 
-                                Icon(Icons.person, size: 20, color: Colors.white),
-                            )
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              game.isAgainstAI
-                                  ? 'IA ${game.aiDifficulty}'
-                                  : _truncateName(opponent?.username ?? 'Adversaire'),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                                    ),
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.network(
+                                      game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                      fit: BoxFit.cover,
+                                      width: 40,
+                                      height: 40,
+                                      errorBuilder: (context, error, stackTrace) => 
+                                        Icon(Icons.person, size: 20, color: Colors.white),
+                                    )
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      opponentName,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Grille ${game.gridSize}×${game.gridSize}',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.6),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            Text(
-                              'Grille ${game.gridSize}×${game.gridSize}',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.6),
-                                fontSize: 12,
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isMyTurn ? Color(0xFF00d4ff).withOpacity(0.2) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isMyTurn ? Color(0xFF00d4ff) : Colors.transparent,
+                                ),
+                              ),
+                              child: Text(
+                                isMyTurn ? 'À VOTRE TOUR' : 'EN COURS',
+                                style: TextStyle(
+                                  color: isMyTurn ? Color(0xFF00d4ff) : Colors.white.withOpacity(0.6),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
                               ),
                             ),
                           ],
                         ),
+                        
+                        SizedBox(height: 16),
+                        
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF2d0052),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                                      ),
+                                    ),
+                                    child: Icon(Icons.person, color: Colors.white, size: 16),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    '$myScore',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              Column(
+                                children: [
+                                  Text(
+                                    '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                                    style: TextStyle(
+                                      color: Color(0xFFe040fb),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'TEMPS RESTANT',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6),
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              Column(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                                      ),
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: ClipOval(
+                                      child: Image.network(
+                                        game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                        fit: BoxFit.cover,
+                                        width: 32,
+                                        height: 32,
+                                        errorBuilder: (context, error, stackTrace) => 
+                                          Icon(Icons.person, size: 20, color: Colors.white),
+                                      )
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    '$opponentScore',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        SizedBox(height: 12),
+                        
+                        Container(
+                          width: double.infinity,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isMyTurn
+                                  ? [Color(0xFF00d4ff), Color(0xFF0099cc)]
+                                  : [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => _resumeGame(game),
+                              child: Center(
+                                child: Text(
+                                  isMyTurn ? 'REPRENDRE' : 'OBSERVER',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isMyTurn ? Color(0xFF00d4ff).withOpacity(0.2) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isMyTurn ? Color(0xFF00d4ff) : Colors.transparent,
-                        ),
-                      ),
-                      child: Text(
-                        isMyTurn ? 'À VOTRE TOUR' : 'EN COURS',
-                        style: TextStyle(
-                          color: isMyTurn ? Color(0xFF00d4ff) : Colors.white.withOpacity(0.6),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                SizedBox(height: 16),
-                
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Color(0xFF2d0052),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                              ),
-                            ),
-                            child: Icon(Icons.person, color: Colors.white, size: 16),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            '$myScore',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      Column(
-                        children: [
-                          Text(
-                            '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                            style: TextStyle(
-                              color: Color(0xFFe040fb),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'TEMPS RESTANT',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      Column(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                              ),
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: ClipOval(
-                              child: Image.network(
-                                game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                                fit: BoxFit.cover,
-                                width: 32,
-                                height: 32,
-                                errorBuilder: (context, error, stackTrace) => 
-                                  Icon(Icons.person, size: 20, color: Colors.white),
-                              )
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            '$opponentScore',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
                 ),
-                
-                SizedBox(height: 12),
-                
-                Container(
-                  width: double.infinity,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isMyTurn
-                          ? [Color(0xFF00d4ff), Color(0xFF0099cc)]
-                          : [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => _resumeGame(game),
-                      child: Center(
-                        child: Text(
-                          isMyTurn ? 'REPRENDRE' : 'OBSERVER',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -845,10 +920,10 @@ Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
     return FutureBuilder<List<Player?>>(
       future: Future.wait([
         if (game.player1Id != null && game.player1Id!.isNotEmpty)
-          GameService.getPlayer(game.player1Id!)
+          _getPlayerWithCache(game.player1Id!)
         else Future.value(null),
         if (game.player2Id != null && game.player2Id!.isNotEmpty)
-          GameService.getPlayer(game.player2Id!)
+          _getPlayerWithCache(game.player2Id!)
         else Future.value(null),
       ]),
       builder: (context, snapshot) {
@@ -1362,132 +1437,123 @@ Widget _buildMatchRequestCard(dynamic request, Player? opponent) {
                       itemCount: games.length,
                       itemBuilder: (context, index) {
                         final game = games[index];
-                        final opponentId = game.players.firstWhere(
-                          (p) => p != _auth.currentUser?.uid,
-                          orElse: () => '',
-                        );
-                        
-                        return FutureBuilder<Player?>(
-                          future: opponentId.isNotEmpty ? GameService.getPlayer(opponentId) : Future.value(null),
-                          builder: (context, opponentSnapshot) {
-                            return _buildMyMatchCard(game, opponentSnapshot.data);
-                          },
-                        );
+                        return _buildMyMatchCard(game);
                       },
                     );
                   },
                 ),
-// TAB 3: DEMANDES DE MATCH - AVEC BOUTON INTÉGRÉ
-StreamBuilder<List<dynamic>>(
-  stream: _matchRequestsStream,
-  builder: (context, snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return _buildLoadingState('Chargement des demandes...');
-    }
 
-    if (snapshot.hasError) {
-      return _buildErrorState('Erreur de chargement des demandes');
-    }
+                // TAB 3: DEMANDES DE MATCH - AVEC BOUTON INTÉGRÉ
+                StreamBuilder<List<dynamic>>(
+                  stream: _matchRequestsStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return _buildLoadingState('Chargement des demandes...');
+                    }
 
-    final requests = snapshot.data ?? [];
+                    if (snapshot.hasError) {
+                      return _buildErrorState('Erreur de chargement des demandes');
+                    }
 
-    // Filtrer les demandes selon le bouton FAB
-    final filteredRequests = requests.where((request) {
-      final isMyRequest = request.fromUserId == _auth.currentUser?.uid;
-      final isExpired = _isRequestExpired(request);
-      
-      // Exclure les demandes expirées
-      if (isExpired) return false;
-      return _showReceivedRequests ? !isMyRequest : isMyRequest;
-    }).toList();
+                    final requests = snapshot.data ?? [];
 
-    return Column(
-      children: [
-        // BOUTON DE FILTRE EN HAUT
-        Container(
-          margin: EdgeInsets.only(top:8,left: 16,right: 16,bottom: 4),
-          width: double.infinity,
-          height: 40,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0xFF00d4ff).withOpacity(0.3),
-                blurRadius: 10,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: _toggleRequestFilter,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _showReceivedRequests ? Icons.download : Icons.upload,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    _showReceivedRequests ? 'DEMANDES REÇUES' : 'DEMANDES ENVOYÉES',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+                    // Filtrer les demandes selon le bouton FAB
+                    final filteredRequests = requests.where((request) {
+                      final isMyRequest = request.fromUserId == _auth.currentUser?.uid;
+                      final isExpired = _isRequestExpired(request);
+                      
+                      // Exclure les demandes expirées
+                      if (isExpired) return false;
+                      return _showReceivedRequests ? !isMyRequest : isMyRequest;
+                    }).toList();
 
-        // LISTE DES DEMANDES
-        if (filteredRequests.isEmpty)
-          Expanded(
-            child: _buildEmptyState(
-              _showReceivedRequests 
-                  ? 'AUCUNE DEMANDE REÇUE' 
-                  : 'AUCUNE DEMANDE ENVOYÉE',
-              _showReceivedRequests
-                  ? 'Les défis que vous recevez apparaîtront ici'
-                  : 'Les défis que vous envoyez apparaîtront ici',
-              _showReceivedRequests ? Icons.download : Icons.upload,
-            ),
-          )
-        else
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              itemCount: filteredRequests.length,
-              itemBuilder: (context, index) {
-                final request = filteredRequests[index];
-                final opponentId = _showReceivedRequests 
-                    ? request.fromUserId 
-                    : request.toUserId;
-                
-                return FutureBuilder<Player?>(
-                  future: GameService.getPlayer(opponentId),
-                  builder: (context, opponentSnapshot) {
-                    return _buildMatchRequestCard(request, opponentSnapshot.data);
+                    return Column(
+                      children: [
+                        // BOUTON DE FILTRE EN HAUT
+                        Container(
+                          margin: EdgeInsets.only(top:8,left: 16,right: 16,bottom: 4),
+                          width: double.infinity,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF00d4ff).withOpacity(0.3),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _toggleRequestFilter,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _showReceivedRequests ? Icons.download : Icons.upload,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    _showReceivedRequests ? 'DEMANDES REÇUES' : 'DEMANDES ENVOYÉES',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // LISTE DES DEMANDES
+                        if (filteredRequests.isEmpty)
+                          Expanded(
+                            child: _buildEmptyState(
+                              _showReceivedRequests 
+                                  ? 'AUCUNE DEMANDE REÇUE' 
+                                  : 'AUCUNE DEMANDE ENVOYÉE',
+                              _showReceivedRequests
+                                  ? 'Les défis que vous recevez apparaîtront ici'
+                                  : 'Les défis que vous envoyez apparaîtront ici',
+                              _showReceivedRequests ? Icons.download : Icons.upload,
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: ListView.builder(
+                              padding: EdgeInsets.symmetric(vertical: 4),
+                              itemCount: filteredRequests.length,
+                              itemBuilder: (context, index) {
+                                final request = filteredRequests[index];
+                                final opponentId = _showReceivedRequests 
+                                    ? request.fromUserId 
+                                    : request.toUserId;
+                                
+                                return FutureBuilder<Player?>(
+                                  future: _getPlayerWithCache(opponentId),
+                                  builder: (context, opponentSnapshot) {
+                                    return _buildMatchRequestCard(request, opponentSnapshot.data);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    );
                   },
-                );
-              },
-            ),
-          ),
-      ],
-    );
-  },
-),
-],
+                ),
+              ],
             ),
           ),
         ],

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
+import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
 import 'package:jeu_carre/screens/game_rule_screen/gamerule_screen.dart';
 import 'package:jeu_carre/screens/online_screen/online_screen.dart';
+import 'package:jeu_carre/screens/profil_adversaire/profil_adversaire.dart';
 import 'package:jeu_carre/services/ranking_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -149,6 +151,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _handleError('Erreur de connexion aux serveurs');
     }
   }
+
+//   void _viewUserProfile(Map<String, dynamic> user) {
+//   Navigator.push(
+//     context,
+//     MaterialPageRoute(
+//       builder: (context) => OpponentProfileScreen(opponent: {
+//         'id': user['id'],
+//         'username': user['username'],
+//         'avatar': user['displayAvatar'],
+//         'score': user['totalPoints'],
+//       }),
+//     ),
+//   );
+// }
+
 
   void _handleError(String message) {
     if (mounted) {
@@ -295,86 +312,86 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildLoadingStats() {
-    return Column(
-      children: [
-        _buildStatItemShimmer('Joueurs inscrits'),
-        _buildStatItemShimmer('Parties jouées'),
-        _buildStatItemShimmer('Actifs aujourd\'hui'),
-        _buildStatItemShimmer('Points totaux'),
-      ],
-    );
-  }
+  // Widget _buildLoadingStats() {
+  //   return Column(
+  //     children: [
+  //       _buildStatItemShimmer('Joueurs inscrits'),
+  //       _buildStatItemShimmer('Parties jouées'),
+  //       _buildStatItemShimmer('Actifs aujourd\'hui'),
+  //       _buildStatItemShimmer('Points totaux'),
+  //     ],
+  //   );
+  // }
 
-  Widget _buildStatsError() {
-    return Column(
-      children: [
-        _buildStatItem('Joueurs inscrits', '--'),
-        _buildStatItem('Parties jouées', '--'),
-        _buildStatItem('Actifs aujourd\'hui', '--'),
-        _buildStatItem('Points totaux', '--'),
-      ],
-    );
-  }
+  // Widget _buildStatsError() {
+  //   return Column(
+  //     children: [
+  //       _buildStatItem('Joueurs inscrits', '--'),
+  //       _buildStatItem('Parties jouées', '--'),
+  //       _buildStatItem('Actifs aujourd\'hui', '--'),
+  //       _buildStatItem('Points totaux', '--'),
+  //     ],
+  //   );
+  // }
 
-  Widget _buildStatItemShimmer(String label) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 4),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 12,
-            ),
-          ),
-          Container(
-            width: 40,
-            height: 12,
-            color: Colors.white.withOpacity(0.3),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildStatItemShimmer(String label) {
+  //   return Container(
+  //     margin: EdgeInsets.symmetric(vertical: 4),
+  //     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white.withOpacity(0.1),
+  //       borderRadius: BorderRadius.circular(10),
+  //     ),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         Text(
+  //           label,
+  //           style: TextStyle(
+  //             color: Colors.white.withOpacity(0.8),
+  //             fontSize: 12,
+  //           ),
+  //         ),
+  //         Container(
+  //           width: 40,
+  //           height: 12,
+  //           color: Colors.white.withOpacity(0.3),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
-  Widget _buildStatItem(String label, String value) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 4),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 12,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: Color(0xFF00d4ff),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildStatItem(String label, String value) {
+  //   return Container(
+  //     margin: EdgeInsets.symmetric(vertical: 4),
+  //     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     decoration: BoxDecoration(
+  //       color: Colors.white.withOpacity(0.1),
+  //       borderRadius: BorderRadius.circular(10),
+  //     ),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         Text(
+  //           label,
+  //           style: TextStyle(
+  //             color: Colors.white.withOpacity(0.8),
+  //             fontSize: 12,
+  //           ),
+  //         ),
+  //         Text(
+  //           value,
+  //           style: TextStyle(
+  //             color: Color(0xFF00d4ff),
+  //             fontSize: 12,
+  //             fontWeight: FontWeight.w700,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildSimpleGameModeCard({
     required String title,
@@ -958,131 +975,133 @@ Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Co
               final rank = index + 1;
               
               return Container(
-                margin: EdgeInsets.only(right: 20),
-                child: Column(
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                color.withOpacity(0.8),
-                                color.withOpacity(0.4),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 75,
-                          height: 75,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFF2d0052),
-                            border: Border.all(
-                              color: color,
-                              width: 3,
-                            ),
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                                    player['avatar'],
-                                    fit: BoxFit.cover,
-                                    width: 75,
-                                    height: 75,
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          bottom: 0,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$rank',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: Color(0xFF2d0052),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: player['trend'] == 'up' ? Colors.green : 
-                                       player['trend'] == 'down' ? Colors.red : Colors.yellow,
-                                width: 2,
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                player['trend'] == 'up' ? Icons.arrow_upward : 
-                                player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
-                                color: player['trend'] == 'up' ? Colors.green : 
-                                       player['trend'] == 'down' ? Colors.red : Colors.yellow,
-                                size: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Container(
-                      width: 90,
-                      child: Column(
+                  margin: EdgeInsets.only(right: 20),
+                  child: Column(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
                         children: [
-                          Text(
-                            _truncateName(player['name']),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [
+                                  color.withOpacity(0.8),
+                                  color.withOpacity(0.4),
+                                ],
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            '${player['score']} pts',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            width: 75,
+                            height: 75,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF2d0052),
+                              border: Border.all(
+                                color: color,
+                                width: 3,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: Image.network(
+                                      player['avatar'],
+                                      fit: BoxFit.cover,
+                                      width: 75,
+                                      height: 75,
+                                      errorBuilder: (context, error, stackTrace) => 
+                                      Icon(Icons.person, size: 30, color: Colors.white),
+                                    ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '$rank',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Color(0xFF2d0052),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: player['trend'] == 'up' ? Colors.green : 
+                                         player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  player['trend'] == 'up' ? Icons.arrow_upward : 
+                                  player['trend'] == 'down' ? Icons.arrow_downward : Icons.remove,
+                                  color: player['trend'] == 'up' ? Colors.green : 
+                                         player['trend'] == 'down' ? Colors.red : Colors.yellow,
+                                  size: 12,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 12),
+                      SizedBox(
+                        width: 90,
+                        child: Column(
+                          children: [
+                            Text(
+                              _truncateName(player['name']),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              '${player['score']} pts',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                 ),
               );
             }).toList(),

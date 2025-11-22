@@ -188,27 +188,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     }
   }
 
-  // Méthode pour obtenir le nom de l'adversaire
-  Future<String> _getOpponentName(Game game) async {
-    final currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) return 'Adversaire';
-    
-    final opponentId = game.players.firstWhere(
-      (id) => id != currentUserId && !id.startsWith('ai_'),
-      orElse: () => '',
-    );
-    
-    if (opponentId.isEmpty) {
-      // Partie contre IA
-      final aiDifficulty = game.aiDifficulty ?? 'beginner';
-      return 'IA ${aiDifficulty[0].toUpperCase()}${aiDifficulty.substring(1)}';
-    } else {
-      // Partie contre joueur
-      final opponent = await GameService.getPlayer(opponentId);
-      return opponent?.username ?? 'Joueur';
-    }
-  }
-
   // Méthode pour obtenir les points gagnés
   // int _getPointsEarned(Game game) {
   //   final currentUserId = _auth.currentUser?.uid;
@@ -367,18 +346,72 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ],
     );
   }
+// Ajoutez cette Map comme variable d'instance dans votre classe
+final Map<String, String> _opponentNameCache = {};
 
-// WIDGET POUR L'HISTORIQUE DYNAMIQUE
+// Modifiez la méthode _getOpponentName pour utiliser le cache
+Future<String> _getOpponentName(Game game) async {
+  final currentUserId = _auth.currentUser?.uid;
+  if (currentUserId == null) return 'Adversaire';
+  
+  final opponentId = game.players.firstWhere(
+    (id) => id != currentUserId && !id.startsWith('ai_'),
+    orElse: () => '',
+  );
+  
+  // Clé unique pour identifier cet adversaire dans cette partie
+  final cacheKey = '${game.id}_$opponentId';
+  
+  // Retourner directement si déjà en cache
+  if (_opponentNameCache.containsKey(cacheKey)) {
+    return _opponentNameCache[cacheKey]!;
+  }
+  
+  if (opponentId.isEmpty) {
+    // Partie contre IA
+    final aiDifficulty = game.aiDifficulty ?? 'beginner';
+    final aiName = 'IA ${aiDifficulty[0].toUpperCase()}${aiDifficulty.substring(1)}';
+    _opponentNameCache[cacheKey] = aiName;
+    return aiName;
+  } else {
+    // Partie contre joueur - mettre en cache même pendant le chargement
+    _opponentNameCache[cacheKey] = 'Chargement...';
+    
+    try {
+      final opponent = await GameService.getPlayer(opponentId);
+      final opponentName = opponent?.username ?? 'Joueur';
+      _opponentNameCache[cacheKey] = opponentName;
+      return opponentName;
+    } catch (e) {
+      _opponentNameCache[cacheKey] = 'Joueur';
+      return 'Joueur';
+    }
+  }
+}
+
+// Modifiez le widget pour utiliser un FutureBuilder avec une clé stable
 Widget _buildGameHistoryItem(Game game, int index) {
+  // Utiliser l'ID du jeu comme clé pour le FutureBuilder
   return FutureBuilder<String>(
+    key: Key('opponent_${game.id}'), // Clé stable basée sur l'ID du jeu
     future: _getOpponentName(game),
     builder: (context, opponentSnapshot) {
-      final opponentName = opponentSnapshot.data ?? 'Chargement...';
+      // Utiliser le cache si disponible, sinon utiliser les données du snapshot
+      final currentUserId = _auth.currentUser?.uid;
+      final opponentId = game.players.firstWhere(
+        (id) => id != currentUserId && !id.startsWith('ai_'),
+        orElse: () => '',
+      );
+      final cacheKey = '${game.id}_$opponentId';
+      
+      final opponentName = _opponentNameCache.containsKey(cacheKey) 
+          ? _opponentNameCache[cacheKey]!
+          : opponentSnapshot.data ?? 'Chargement...';
+      
       final result = _getGameResult(game);
       final score = _getGameScore(game);
       
       // Récupérer le score de l'utilisateur courant
-      final currentUserId = _auth.currentUser?.uid;
       final myScore = currentUserId != null ? game.scores[currentUserId] ?? 0 : 0;
       
       final date = _formatRelativeDate(game.finishedAt ?? game.updatedAt);
@@ -451,7 +484,7 @@ Widget _buildGameHistoryItem(Game game, int index) {
                 ),
               ),
               Text(
-                '+ $myScore pts', // Afficher le score marqué pendant le match
+                '+ $myScore pts',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.6),
                   fontSize: 10,
@@ -887,7 +920,7 @@ Widget _buildGameHistoryItem(Game game, int index) {
                               ],
                               image: _currentPlayer!.avatarUrl != null
                                   ? DecorationImage(
-                                      image: NetworkImage(_currentPlayer!.avatarUrl!),
+                                      image: NetworkImage(_currentPlayer!.avatarUrl!,),
                                       fit: BoxFit.cover,
                                     )
                                   : DecorationImage(
