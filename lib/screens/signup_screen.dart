@@ -858,21 +858,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 // Bouton "Se connecter"
                 _buildLoginButton(),
                 
-                const SizedBox(height: 30),
-                
-                // Note
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'Vous pourrez modifier votre photo et votre nom plus tard dans les paramètres.',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),

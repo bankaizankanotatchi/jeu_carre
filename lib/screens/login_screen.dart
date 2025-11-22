@@ -582,21 +582,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 
                 const SizedBox(height: 30),
                 
-                // Lien mot de passe oublié (optionnel)
-                TextButton(
-                  onPressed: () {
-                    // TODO: Implémenter la réinitialisation du mot de passe
-                    _showError('Fonctionnalité à venir');
-                  },
-                  child: Text(
-                    'Mot de passe oublié ?',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 14,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
+                // // Lien mot de passe oublié (optionnel)
+                // TextButton(
+                //   onPressed: () {
+                //     // TODO: Implémenter la réinitialisation du mot de passe
+                //     _showError('Fonctionnalité à venir');
+                //   },
+                //   child: Text(
+                //     'Mot de passe oublié ?',
+                //     style: TextStyle(
+                //       color: Colors.white.withOpacity(0.7),
+                //       fontSize: 14,
+                //       decoration: TextDecoration.underline,
+                //     ),
+                //   ),
+                // ),
               ],
             ),
           ),

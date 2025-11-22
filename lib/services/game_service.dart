@@ -677,27 +677,53 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
             .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
             .toList());
   }
+  
 
-  /// Envoyer une demande de match avec notification
-  static Future<void> sendMatchRequest(MatchRequest request) async {
-    try {
-      final existingRequest = await matchRequestsCollection
-          .where('fromUserId', isEqualTo: request.fromUserId)
-          .where('toUserId', isEqualTo: request.toUserId)
-          .where('status', isEqualTo: MatchRequestStatus.pending.toString())
-          .limit(1)
-          .get();
-
-      if (existingRequest.docs.isNotEmpty) {
-        throw Exception('Vous avez déjà une demande en attente avec ce joueur');
-      }
-
-      await matchRequestsCollection.doc(request.id).set(request.toMap());
-      await _sendMatchRequestNotification(request);
-    } catch (e) {
-      throw Exception('Erreur envoi demande: $e');
+ static bool _isRequestExpired(dynamic request) {
+    final now = DateTime.now();
+    
+    // CORRECTION: Vérifier si createdAt est un Timestamp ou DateTime
+    DateTime createdAt;
+    if (request.createdAt is Timestamp) {
+      createdAt = (request.createdAt as Timestamp).toDate();
+    } else if (request.createdAt is DateTime) {
+      createdAt = request.createdAt as DateTime;
+    } else {
+      // Si c'est un int (millisecondsSinceEpoch)
+      createdAt = DateTime.fromMillisecondsSinceEpoch(request.createdAt);
     }
+    
+    final difference = now.difference(createdAt).inHours;
+    return difference >= 24;
   }
+
+/// Envoyer une demande de match avec notification
+static Future<void> sendMatchRequest(MatchRequest request) async {
+  try {
+    // Vérifier s'il existe une demande PENDING NON EXPIRÉE entre ces joueurs
+    final existingRequests = await matchRequestsCollection
+        .where('fromUserId', isEqualTo: request.fromUserId)
+        .where('toUserId', isEqualTo: request.toUserId)
+        .where('status', isEqualTo: MatchRequestStatus.pending.toString())
+        .get();
+
+    // Vérifier si une des demandes existantes n'est pas expirée
+    final hasValidPendingRequest = existingRequests.docs.any((doc) {
+            final data = doc.data() as Map<String, dynamic>; // Conversion explicite
+      final existingRequest = MatchRequest.fromMap(data);
+      return !_isRequestExpired(existingRequest);
+    });
+
+    if (hasValidPendingRequest) {
+      throw Exception('Vous avez déjà une demande en attente avec ce joueur');
+    }
+
+    await matchRequestsCollection.doc(request.id).set(request.toMap());
+    await _sendMatchRequestNotification(request);
+  } catch (e) {
+    throw Exception('Erreur envoi demande: $e');
+  }
+}
 
   /// Accepter une demande de match avec userId
   static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
@@ -808,6 +834,95 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
       throw Exception('Erreur annulation demande: $e');
     }
   }
+
+  // ============================================================
+// MÉTHODE POUR RÉCUPÉRER TOUTES LES DEMANDES DE MATCH
+// ============================================================
+
+/// Récupérer toutes les demandes de match (reçues et envoyées) pour un utilisateur
+static Stream<List<dynamic>> getMatchRequests(String userId) {
+  return matchRequestsCollection
+      .where('status', whereIn: [
+        MatchRequestStatus.pending.toString(),
+        MatchRequestStatus.accepted.toString(),
+        MatchRequestStatus.declined.toString(),
+      ])
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .handleError((error) => print('Erreur stream demandes de match: $error'))
+      .map((snapshot) {
+        final requests = <dynamic>[];
+        
+        for (final doc in snapshot.docs) {
+          try {
+            final request = MatchRequest.fromMap(doc.data() as Map<String, dynamic>);
+            
+            // Filtrer pour n'inclure que les demandes de l'utilisateur courant
+            if (request.fromUserId == userId || request.toUserId == userId) {
+              requests.add(request);
+            }
+          } catch (e) {
+            print('Erreur parsing demande de match: $e');
+          }
+        }
+        
+        return requests;
+      });
+}
+
+/// Récupérer les demandes de match avec les informations des joueurs
+static Stream<List<Map<String, dynamic>>> getMatchRequestsWithPlayers(String userId) {
+  return getMatchRequests(userId).asyncMap((requests) async {
+    final requestsWithPlayers = <Map<String, dynamic>>[];
+    
+    for (final request in requests) {
+      try {
+        final opponentId = request.fromUserId == userId ? request.toUserId : request.fromUserId;
+        final opponent = await getPlayer(opponentId);
+        
+        requestsWithPlayers.add({
+          'request': request,
+          'opponent': opponent,
+          'isMyRequest': request.fromUserId == userId,
+        });
+      } catch (e) {
+        print('Erreur récupération joueur pour demande: $e');
+      }
+    }
+    
+    return requestsWithPlayers;
+  });
+}
+
+/// Vérifier si une demande de match existe déjà entre deux joueurs
+static Future<bool> checkExistingMatchRequest(String fromUserId, String toUserId) async {
+  try {
+    final existingRequest = await matchRequestsCollection
+        .where('fromUserId', isEqualTo: fromUserId)
+        .where('toUserId', isEqualTo: toUserId)
+        .where('status', isEqualTo: MatchRequestStatus.pending.toString())
+        .limit(1)
+        .get();
+
+    return existingRequest.docs.isNotEmpty;
+  } catch (e) {
+    print('Erreur vérification demande existante: $e');
+    return false;
+  }
+}
+
+/// Récupérer le nombre de demandes en attente
+static Stream<int> getPendingRequestsCount(String userId) {
+  return matchRequestsCollection
+      .where('toUserId', isEqualTo: userId)
+      .where('status', isEqualTo: MatchRequestStatus.pending.toString())
+      .snapshots()
+      .map((snapshot) => snapshot.docs.length)
+      .handleError((error) {
+        print('Erreur stream compteur demandes: $error');
+        return 0;
+      });
+}
 
   // ============================================================
   // GESTION DES RÉSULTATS ET STATISTIQUES - CORRECTIONS APPLIQUÉES
