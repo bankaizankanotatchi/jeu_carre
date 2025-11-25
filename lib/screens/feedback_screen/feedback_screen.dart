@@ -29,24 +29,24 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final Map<String, int> _localLikesCount = {};
   final Map<String, int> _localDislikesCount = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _loadMessages();
-    _checkAdminStatus();
-    
-    // Écouter le focus pour afficher le modal de catégorie
-    _messageFocusNode.addListener(() {
-      if (_messageFocusNode.hasFocus && _selectedCategory == null) {
-        _showCategoryModal();
-      }
-    });
+@override
+void initState() {
+  super.initState();
+  _loadMessages();
+  _checkAdminStatus();
+  
+  // Écouter le focus pour afficher le modal de catégorie (uniquement pour les non-admins)
+  _messageFocusNode.addListener(() {
+    if (_messageFocusNode.hasFocus && _selectedCategory == null && !_isAdmin) {
+      _showCategoryModal();
+    }
+  });
 
-    // Scroll to bottom when messages load
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
-  }
+  // Scroll to bottom when messages load
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _scrollToBottom();
+  });
+}
 
   void _loadMessages() {
     setState(() {
@@ -190,50 +190,50 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     );
   }
 
-  Future<void> _sendMessage() async {
-    if (_selectedCategory == null) {
-      _showCategoryModal();
-      return;
-    }
-
-    if (_messageController.text.trim().isEmpty) {
-      _showError('Veuillez écrire un message');
-      return;
-    }
-
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      await FeedbackService.createFeedback(
-        category: _selectedCategory!,
-        content: _messageController.text.trim(),
-        isPublic: true,
-      );
-
-      setState(() {
-        _messageController.clear();
-        _selectedCategory = null;
-        _showCategoryAboveInput = false;
-      });
-
-      // Scroll vers le bas pour voir le nouveau message
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
-    } catch (e) {
-      _showError('Erreur lors de l\'envoi: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+Future<void> _sendMessage() async {
+  // Si ce n'est pas un admin ET qu'aucune catégorie n'est sélectionnée, afficher le modal
+  if (!_isAdmin && _selectedCategory == null) {
+    _showCategoryModal();
+    return;
   }
 
+  if (_messageController.text.trim().isEmpty) {
+    _showError('Veuillez écrire un message');
+    return;
+  }
+
+  if (_isLoading) return;
+
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
+
+  try {
+    await FeedbackService.createFeedback(
+      category: _selectedCategory ?? FeedbackCategory.other, // Utiliser "other" par défaut si admin
+      content: _messageController.text.trim(),
+      isPublic: true,
+    );
+
+    setState(() {
+      _messageController.clear();
+      _selectedCategory = null;
+      _showCategoryAboveInput = false;
+    });
+
+    // Scroll vers le bas pour voir le nouveau message
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
+  } catch (e) {
+    _showError('Erreur lors de l\'envoi: $e');
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
   Future<void> _likeMessage(String messageId, int currentLikes, int currentDislikes) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
@@ -473,9 +473,216 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
   }
 
+  // NOUVELLE MÉTHODE POUR LES MESSAGES ADMIN
+  Widget _buildAdminMessage(Message message, int displayLikes, int displayDislikes, bool isLiked, bool isDisliked) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 16, horizontal: MediaQuery.of(context).size.width * 0.05),
+      width: MediaQuery.of(context).size.width * 0.9,
+      child: Column(
+        children: [
+          // En-tête admin avec photo et nom
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              // Photo de l'admin
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                  ),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: ClipOval(
+                  child: message.userAvatarUrl != null
+                      ? Image.network(
+                          message.userAvatarUrl!,
+                          fit: BoxFit.cover,
+                          width: 40,
+                          height: 40,
+                          errorBuilder: (context, error, stackTrace) => 
+                            Icon(Icons.admin_panel_settings, size: 16, color: Colors.white),
+                        )
+                      : Icon(Icons.admin_panel_settings, size: 16, color: Colors.white),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Nom de l'admin
+              Text(
+                'Équipe Shikaku',
+                style: TextStyle(
+                  color: Color(0xFF00d4ff),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          
+          // Bulle de message admin (même design que les réponses admin)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF00d4ff).withOpacity(0.15),
+                  Color(0xFF0099cc).withOpacity(0.15),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Color(0xFF00d4ff),
+                width: 2,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Contenu du message
+                Text(
+                  message.content,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                ),
+                SizedBox(height: 8),
+                
+                // Date et heure
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatDateTime(message.createdAt),
+                      style: TextStyle(
+                        color: Color(0xFF00d4ff).withOpacity(0.7),
+                        fontSize: 11,
+                      ),
+                    ),],
+                ),
+              ],
+            ),
+          ),
+          
+          // Interactions (likes/dislikes) - optionnel pour les messages admin
+          SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              // Bouton Like
+              GestureDetector(
+                onTap: () => _likeMessage(message.id, message.likesCount, message.dislikesCount),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isLiked ? Color(0xFF00d4ff).withOpacity(0.2) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isLiked ? Color(0xFF00d4ff) : Colors.transparent,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.thumb_up, 
+                        color: isLiked ? Color(0xFF00d4ff) : Color(0xFF00d4ff).withOpacity(0.7), 
+                        size: 16
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        displayLikes.toString(),
+                        style: TextStyle(
+                          color: isLiked ? Color(0xFF00d4ff) : Color(0xFF00d4ff).withOpacity(0.7),
+                          fontSize: 12,
+                          fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 16),
+              
+              // Bouton Dislike
+              GestureDetector(
+                onTap: () => _dislikeMessage(message.id, message.likesCount, message.dislikesCount),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDisliked ? Color(0xFFff006e).withOpacity(0.2) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDisliked ? Color(0xFFff006e) : Colors.transparent,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.thumb_down, 
+                        color: isDisliked ? Color(0xFFff006e) : Color(0xFFff006e).withOpacity(0.7), 
+                        size: 16
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        displayDislikes.toString(),
+                        style: TextStyle(
+                          color: isDisliked ? Color(0xFFff006e) : Color(0xFFff006e).withOpacity(0.7),
+                          fontSize: 12,
+                          fontWeight: isDisliked ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      SizedBox(width:8),
+                                          // Bouton Suppression pour admin (à côté des interactions)
+                    if (_isAdmin) ...[
+                      SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => _deleteMessage(message.id),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                color: Colors.red.withOpacity(0.7),
+                                size: 14,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageItem(Message message) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final isCurrentUser = message.userId == currentUser?.uid;
+    final isAdminMessage = message.isAdminMessage ?? false; // Vérifier si c'est un message admin
     
     // Utiliser les compteurs locaux si disponibles
     final displayLikes = _getLocalLikesCount(message.id, message.likesCount);
@@ -483,6 +690,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     final isLiked = _isLikedByCurrentUser(message.id);
     final isDisliked = _isDislikedByCurrentUser(message.id);
     
+    // Si c'est un message admin, afficher au centre avec le design spécial
+    if (isAdminMessage) {
+      return _buildAdminMessage(message, displayLikes, displayDislikes, isLiked, isDisliked);
+    }
+    
+    // Sinon, afficher le message normal
     return Container(
       margin: EdgeInsets.only(bottom: 16, left: isCurrentUser ? 50 : 0, right: isCurrentUser ? 0 : 50),
       child: Row(
@@ -490,43 +703,43 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isCurrentUser) ...[
-Container(
-  width: 40,
-  height: 40,
-  decoration: BoxDecoration(
-    shape: BoxShape.circle,
-    gradient: LinearGradient(
-      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-    ),
-    border: Border.all(color: Colors.white, width: 3),
-    boxShadow: [
-      BoxShadow(
-        color: Color(0xFF9c27b0).withOpacity(0.5),
-        blurRadius: 15,
-        spreadRadius: 3,
-      ),
-    ],
-  ),
-  child: ClipOval( // Force le clip circulaire
-    child: message.userAvatarUrl != null
-        ? Image.network(
-            message.userAvatarUrl!,
-            fit: BoxFit.cover,
-            width: 40,
-            height: 40,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 20, color: Colors.white),
-          )
-        : Image.network(
-            message.userDefaultEmoji,
-            fit: BoxFit.cover,
-            width: 40,
-            height: 40,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 20, color: Colors.white),
-          ),
-  ),
-),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                ),
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF9c27b0).withOpacity(0.5),
+                    blurRadius: 15,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              child: ClipOval( // Force le clip circulaire
+                child: message.userAvatarUrl != null
+                    ? Image.network(
+                        message.userAvatarUrl!,
+                        fit: BoxFit.cover,
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) => 
+                          Icon(Icons.person, size: 20, color: Colors.white),
+                      )
+                    : Image.network(
+                        message.userDefaultEmoji,
+                        fit: BoxFit.cover,
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) => 
+                          Icon(Icons.person, size: 20, color: Colors.white),
+                      ),
+              ),
+            ),
             SizedBox(width: 8),
           ],
           Expanded(
@@ -798,43 +1011,43 @@ Container(
           ),
           if (isCurrentUser) ...[
             SizedBox(width: 8),
-Container(
-  width: 40,
-  height: 40,
-  decoration: BoxDecoration(
-    shape: BoxShape.circle,
-    gradient: LinearGradient(
-      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-    ),
-    border: Border.all(color: Colors.white, width: 3),
-    boxShadow: [
-      BoxShadow(
-        color: Color(0xFF9c27b0).withOpacity(0.5),
-        blurRadius: 15,
-        spreadRadius: 3,
-      ),
-    ],
-  ),
-  child: ClipOval( // Force le clip circulaire
-    child: message.userAvatarUrl != null
-        ? Image.network(
-            message.userAvatarUrl!,
-            fit: BoxFit.cover,
-            width: 40,
-            height: 40,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 20, color: Colors.white),
-          )
-        : Image.network(
-            message.userDefaultEmoji,
-            fit: BoxFit.cover,
-            width: 40,
-            height: 40,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 20, color: Colors.white),
-          ),
-  ),
-),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                ),
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF9c27b0).withOpacity(0.5),
+                    blurRadius: 15,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              child: ClipOval( // Force le clip circulaire
+                child: message.userAvatarUrl != null
+                    ? Image.network(
+                        message.userAvatarUrl!,
+                        fit: BoxFit.cover,
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) => 
+                          Icon(Icons.person, size: 20, color: Colors.white),
+                      )
+                    : Image.network(
+                        message.userDefaultEmoji,
+                        fit: BoxFit.cover,
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) => 
+                          Icon(Icons.person, size: 20, color: Colors.white),
+                      ),
+              ),
+            ),
           ],
         ],
       ),
@@ -1125,22 +1338,24 @@ Container(
                                 children: [
                                   Expanded(
                                     child: TextField(
-                                      controller: _messageController,
-                                      focusNode: _messageFocusNode,
-                                      maxLines: null,
-                                      textInputAction: TextInputAction.newline,
-                                      keyboardType: TextInputType.multiline,
-                                      style: TextStyle(color: Colors.white),
-                                      decoration: InputDecoration(
-                                        hintText: 'Tapez votre message...',
-                                        hintStyle: TextStyle(color: Colors.white54),
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
+                                        controller: _messageController,
+                                        focusNode: _messageFocusNode,
+                                        maxLines: null,
+                                        textInputAction: TextInputAction.newline,
+                                        keyboardType: TextInputType.multiline,
+                                        style: TextStyle(color: Colors.white),
+                                        decoration: InputDecoration(
+                                          hintText: _isAdmin 
+                                              ? 'Écrivez un message (admin)...' 
+                                              : 'Tapez votre message...',
+                                          hintStyle: TextStyle(color: Colors.white54),
+                                          border: InputBorder.none,
+                                          contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
                                         ),
                                       ),
-                                    ),
                                   ),
                                 ],
                               ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
+import 'package:jeu_carre/services/ranking_service.dart';
 
 class OpponentProfileScreen extends StatefulWidget {
   final Map<String, dynamic> opponent;
@@ -18,6 +19,10 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   Player? _opponentPlayer;
   bool _isLoading = true;
 
+  // MODIFICATION: Variables optimisées
+  int _totalPlayers = 0;
+  bool _isLoadingRank = true;
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
@@ -25,6 +30,33 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
     super.initState();
     _tabController = TabController(length: 1, vsync: this);
     _loadOpponentData();
+    _loadTotalPlayersCount(); // MODIFICATION: Charger seulement le total
+  }
+
+  // NOUVELLE MÉTHODE OPTIMISÉE: Charger seulement le total des joueurs
+  Future<void> _loadTotalPlayersCount() async {
+    try {
+      setState(() {
+        _isLoadingRank = true;
+      });
+
+      // Utiliser la nouvelle fonction du RankingService
+      final totalPlayers = await RankingService.getTotalPlayersCount();
+      
+      if (mounted) {
+        setState(() {
+          _totalPlayers = totalPlayers!;
+          _isLoadingRank = false;
+        });
+      }
+    } catch (e) {
+      print('Erreur chargement nombre total joueurs: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingRank = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadOpponentData() async {
@@ -78,7 +110,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
       return widget.opponent['defaultEmoji'] as String;
     }
     // Fallback par défaut
-    return 'https://via.placeholder.com/80?text=J'; // ou une image par défaut
+    return 'https://via.placeholder.com/80?text=J';
   }
 
   int get _displayScore => _opponentPlayer?.totalPoints ?? (widget.opponent['score'] as int?) ?? 0;
@@ -90,6 +122,9 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   int get _gamesDraw => _opponentPlayer?.gamesDraw ?? 0;
   int get _bestGamePoints => _opponentPlayer?.stats.bestGamePoints ?? 0;
   int get _winStreak => _opponentPlayer?.stats.winStreak ?? 0;
+
+  // NOUVEAU GETTER: Utiliser globalRank du joueur
+  int get _globalRank => _opponentPlayer?.globalRank ?? 0;
 
   @override
   void dispose() {
@@ -109,7 +144,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
         builder: (context) => GameSetupScreen(
           isAgainstAI: false,
           isOnlineMatch: true,
-          opponent: _opponentPlayer, // Passer l'adversaire
+          opponent: _opponentPlayer,
         ),
       ),
     );
@@ -197,6 +232,132 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
           ),
         );
       },
+    );
+  }
+
+  // MÉTHODE OPTIMISÉE: Utiliser globalRank du joueur
+  Widget _buildRankSection() {
+    if (_isLoadingRank) {
+      return Row(
+        children: [
+          Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 16),
+          SizedBox(width: 6),
+          Text(
+            'Chargement du rang...',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // UTILISER LA PROPRIÉTÉ globalRank DU JOUEUR
+    final rank = _globalRank;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF1a0033).withOpacity(0.8),
+            Color(0xFF2d0052).withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: rank <= 3 && rank > 0 ? Color(0xFFFFD700) : Color(0xFF00d4ff),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Icône de couronne pour les top 3
+          if (rank <= 3 && rank > 0)
+            Icon(
+              Icons.emoji_events,
+              color: Color(0xFFFFD700),
+              size: 16,
+            )
+          else
+            Icon(
+              Icons.leaderboard,
+              color: Color(0xFF00d4ff),
+              size: 16,
+            ),
+          
+          SizedBox(width: 6),
+          
+          // Texte du rang avec style amélioré
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RANG',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              Text(
+                rank > 0 ? '#$rank' : 'Non classé',
+                style: TextStyle(
+                  color: rank <= 3 ? Color(0xFFFFD700) : Color(0xFF00d4ff),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Poppins',
+                  letterSpacing: 0.5,
+                  shadows: rank <= 3 ? [
+                    Shadow(
+                      blurRadius: 10,
+                      color: Color(0xFFFFD700).withOpacity(0.5),
+                    )
+                  ] : [],
+                ),
+              ),
+            ],
+          ),
+          
+          SizedBox(width: 8),
+          
+          // Séparateur
+          Container(
+            width: 1,
+            height: 20,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          
+          SizedBox(width: 8),
+          
+          // Total des joueurs (calculé dynamiquement)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SUR',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              Text(
+                '$_totalPlayers',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -391,7 +552,8 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
             ],
           ),
           
-          SizedBox(height: 10),]
+          SizedBox(height: 10),
+        ],
       ),
     );
   }
@@ -461,6 +623,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                 
                 Column(
                   children: [
+                    // Bouton retour
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -481,58 +644,86 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                         ),
                       ],
                     ),
-                    Column(
+                    
+                    SizedBox(height: 10),
+                    
+                    // Row pour le profil
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                       Container(
-  width: 80,
-  height: 80,
-  decoration: BoxDecoration(
-    shape: BoxShape.circle,
-    gradient: LinearGradient(
-      colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-    ),
-    border: Border.all(color: Colors.white, width: 3),
-    boxShadow: [
-      BoxShadow(
-        color: Color(0xFF9c27b0).withOpacity(0.5),
-        blurRadius: 15,
-        spreadRadius: 3,
-      ),
-    ],
-  ),
-  child: ClipOval( // Force le clip circulaire
-    child: _displayAvatar.startsWith('http')
-        ? Image.network(
-            _displayAvatar,
-            fit: BoxFit.cover,
-            width: 80,
-            height: 80,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 30, color: Colors.white),
-          )
-        : Center(
-            child: Text(
-              _displayAvatar,
-              style: TextStyle(fontSize: 30),
-            ),
-          ),
-  ),
-),
-                        SizedBox(height: 4),
-                        Text(
-                          _displayUsername,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
+                        // Photo de profil
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                            ),
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xFF9c27b0).withOpacity(0.5),
+                                blurRadius: 15,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: _displayAvatar.startsWith('http')
+                                ? Image.network(
+                                    _displayAvatar,
+                                    fit: BoxFit.cover,
+                                    width: 80,
+                                    height: 80,
+                                    errorBuilder: (context, error, stackTrace) => 
+                                      Icon(Icons.person, size: 30, color: Colors.white),
+                                  )
+                                : Center(
+                                    child: Text(
+                                      _displayAvatar,
+                                      style: TextStyle(fontSize: 30),
+                                    ),
+                                  ),
                           ),
                         ),
-                        SizedBox(height: 1),
-                        Text(
-                          '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 14,
+
+                        SizedBox(width: 16),
+
+                        // Informations du joueur
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Nom du joueur
+                              Text(
+                                _displayUsername,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              
+                              SizedBox(height: 4),
+                              
+                              // Points et taux de victoire
+                              Text(
+                                '$_displayScore points • ${_winRate.toStringAsFixed(1)}% victoires',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: 14,
+                                ),
+                              ),
+                              
+                              SizedBox(height: 8),
+                              
+                              // NOUVEAU: Section Rang optimisée
+                              _buildRankSection(),
+                            ],
                           ),
                         ),
                       ],
@@ -581,7 +772,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   }
 }
 
-// Painter pour les statistiques
 class WinRatePainter extends CustomPainter {
   final double winPercent;
   final double lossPercent;

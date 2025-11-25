@@ -5,6 +5,7 @@ import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/game_result.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/models/ai_player.dart';
+import 'package:jeu_carre/services/ranking_service.dart';
 
 class GameService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -1057,6 +1058,10 @@ static Future<void> _saveGameResults(Game game) async {
     }
     
     print('✅ Tous les résultats sauvegardés pour partie ${game.id}');
+        // 🎯 METTRE À JOUR LES RANGS APRÈS LA PARTIE
+    await RankingService.updateRanksAfterGame(game.players);
+    
+    print('✅ Rangs mis à jour après la partie');
   } catch (e) {
     print('❌ Erreur sauvegarde résultats: $e');
   }

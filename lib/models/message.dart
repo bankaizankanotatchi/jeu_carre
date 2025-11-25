@@ -17,6 +17,7 @@ class Message {
   final String? adminResponse;
   final DateTime? respondedAt;
   final bool isPublic;
+  final bool isAdminMessage; // NOUVEAU CHAMP
 
   Message({
     required this.id,
@@ -34,7 +35,8 @@ class Message {
     this.adminResponseId,
     this.adminResponse,
     this.respondedAt,
-    this.isPublic = true, // Par défaut public
+    this.isPublic = true,
+    this.isAdminMessage = false, // Par défaut false
   }) : likedBy = likedBy ?? [],
        dislikedBy = dislikedBy ?? [];
 
@@ -58,6 +60,7 @@ class Message {
       'adminResponse': adminResponse,
       'respondedAt': respondedAt?.millisecondsSinceEpoch,
       'isPublic': isPublic,
+      'isAdminMessage': isAdminMessage, // AJOUTÉ
     };
   }
 
@@ -86,6 +89,7 @@ class Message {
           ? DateTime.fromMillisecondsSinceEpoch(map['respondedAt'])
           : null,
       isPublic: map['isPublic'] ?? true,
+      isAdminMessage: map['isAdminMessage'] ?? false, // AJOUTÉ
     );
   }
 }

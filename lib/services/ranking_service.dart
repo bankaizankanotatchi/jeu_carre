@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/ai_player.dart';
@@ -86,6 +88,173 @@ class RankingService {
             return Player.fromMap(doc.data() as Map<String, dynamic>);
           }).toList();
         });
+  }
+
+  static Stream<List<Player>> getAllGlobalRanking() {
+    return _playersCollection
+        .where('totalPoints', isGreaterThan: 0)
+        .orderBy('totalPoints', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return Player.fromMap(doc.data() as Map<String, dynamic>);
+          }).toList();
+        });
+  }
+
+  // ============================================
+  // CALCUL ET MISE À JOUR DES RANGS GLOBAUX
+  // ============================================
+
+  /// Calculer et mettre à jour le rang global de TOUS les joueurs
+  static Future<void> updateAllGlobalRanks() async {
+    try {
+      print('🔄 Début calcul des rangs globaux...');
+      
+      // 1. Récupérer tous les joueurs triés par points (décroissant)
+      final playersSnapshot = await _playersCollection
+          .where('totalPoints', isGreaterThan: 0)
+          .orderBy('totalPoints', descending: true)
+          .get();
+
+      final totalPlayers = playersSnapshot.size;
+      print('📊 $totalPlayers joueurs à classer');
+
+      if (totalPlayers == 0) {
+        print('ℹ️ Aucun joueur à classer');
+        return;
+      }
+
+      // 2. Préparer le batch update
+      final batch = _firestore.batch();
+      int rank = 1;
+
+      // 3. Attribuer les rangs (1 = meilleur)
+      for (final doc in playersSnapshot.docs) {
+        batch.update(doc.reference, {
+          'globalRank': rank,
+          'lastRankUpdate': DateTime.now().millisecondsSinceEpoch,
+        });
+        rank++;
+      }
+
+      // 4. Exécuter la mise à jour
+      await batch.commit();
+      print('✅ Rangs globaux mis à jour pour $totalPlayers joueurs');
+
+    } catch (e) {
+      print('❌ Erreur calcul rangs globaux: $e');
+      rethrow;
+    }
+  }
+
+  /// Mettre à jour le rang global d'UN joueur spécifique
+  static Future<void> updatePlayerGlobalRank(String playerId) async {
+    try {
+      // 1. Récupérer le joueur
+      final playerDoc = await _playersCollection.doc(playerId).get();
+      if (!playerDoc.exists) {
+        print('❌ Joueur non trouvé: $playerId');
+        return;
+      }
+
+      final playerData = playerDoc.data() as Map<String, dynamic>;
+      final playerPoints = playerData['totalPoints'] as int? ?? 0;
+
+      // 2. Si le joueur n'a pas de points, le mettre en dernier
+      if (playerPoints == 0) {
+        final totalPlayersCount = await _playersCollection
+            .where('totalPoints', isGreaterThan: 0)
+            .count()
+            .get();
+        
+        final rank = totalPlayersCount.count! + 1; // Dernière position
+        
+        await playerDoc.reference.update({
+          'globalRank': rank,
+          'lastRankUpdate': DateTime.now().millisecondsSinceEpoch
+        });
+        
+        print('📝 Joueur sans points mis en position $rank: $playerId');
+        return;
+      }
+
+      // 3. Compter combien de joueurs ont PLUS de points que lui
+      final betterPlayersCount = await _playersCollection
+          .where('totalPoints', isGreaterThan: playerPoints)
+          .count()
+          .get();
+
+      // 4. Le rang = nombre de joueurs avec plus de points + 1
+      final rank = betterPlayersCount.count! + 1;
+
+      // 5. Mettre à jour le rang
+      await playerDoc.reference.update({
+        'globalRank': rank,
+        'lastRankUpdate': DateTime.now().millisecondsSinceEpoch
+      });
+
+      print('✅ Rang mis à jour: $playerId → #$rank');
+
+    } catch (e) {
+      print('❌ Erreur mise à jour rang joueur $playerId: $e');
+    }
+  }
+
+  /// Mettre à jour les rangs de plusieurs joueurs après une partie
+  static Future<void> updateRanksAfterGame(List<String> playerIds) async {
+    try {
+      print('🔄 Mise à jour des rangs après partie pour ${playerIds.length} joueurs...');
+      
+      for (final playerId in playerIds) {
+        if (!playerId.startsWith('ai_')) { // Ignorer les IA
+          await updatePlayerGlobalRank(playerId);
+        }
+      }
+      
+      print('✅ Rangs mis à jour pour tous les joueurs de la partie');
+    } catch (e) {
+      print('❌ Erreur mise à jour rangs après partie: $e');
+    }
+  }
+
+  /// Fonction pour compter le nombre total de joueurs
+  static Future<int?> getTotalPlayersCount() async {
+    try {
+      final countSnapshot = await _playersCollection.count().get();
+      return countSnapshot.count;
+    } catch (e) {
+      print('❌ Erreur comptage joueurs: $e');
+      return 0;
+    }
+  }
+
+  /// Fonction pour compter le nombre de joueurs actifs (avec points)
+  static Future<int?> getActivePlayersCount() async {
+    try {
+      final countSnapshot = await _playersCollection
+          .where('totalPoints', isGreaterThan: 0)
+          .count()
+          .get();
+      return countSnapshot.count;
+    } catch (e) {
+      print('❌ Erreur comptage joueurs actifs: $e');
+      return 0;
+    }
+  }
+
+  /// Récupérer le rang d'un joueur spécifique
+  static Future<int> getPlayerRank(String playerId) async {
+    try {
+      final playerDoc = await _playersCollection.doc(playerId).get();
+      if (!playerDoc.exists) return 0;
+      
+      final playerData = playerDoc.data() as Map<String, dynamic>;
+      return playerData['globalRank'] ?? 0;
+    } catch (e) {
+      print('❌ Erreur récupération rang joueur: $e');
+      return 0;
+    }
   }
 
   // ============================================
@@ -437,5 +606,24 @@ class RankingService {
     } catch (e) {
       return false;
     }
+  }
+
+  // ============================================
+  // PROGRAMMATION AUTOMATIQUE DES MISES À JOUR
+  // ============================================
+
+  /// Démarrer le scheduler pour les mises à jour automatiques
+  static void startRankScheduler() {
+    // Mettre à jour tous les rangs toutes les 6 heures
+    Timer.periodic(Duration(hours: 6), (timer) {
+      updateAllGlobalRanks();
+    });
+    
+    print('⏰ Scheduler des rangs démarré (mise à jour toutes les 6h)');
+  }
+
+  /// Forcer la mise à jour immédiate de tous les rangs
+  static Future<void> forceUpdateAllRanks() async {
+    await updateAllGlobalRanks();
   }
 }

@@ -17,12 +17,15 @@ class Player {
   final DateTime lastLoginAt;
   final UserStats stats;
   final bool isActive;
-    // PROPRIÉTÉS CONSERVÉES (essentielles pour le frontend)
+  // PROPRIÉTÉS CONSERVÉES (essentielles pour le frontend)
   final bool isOnline;          // Pour OnlineUsersScreen
   final bool inGame;           // Pour voir qui est en jeu
   final String? currentGameId; // Pour rejoindre une partie
   final List<String> achievements; // Pour ProfileScreen
   final String statusMessage;  // Optionnel pour le profil
+  // NOUVELLE PROPRIÉTÉ : RANG GLOBAL
+  final int globalRank;         // Rang parmi tous les joueurs (1 = premier)
+  final DateTime lastRankUpdate; // Quand le rang a été mis à jour
 
   Player({
     required this.id,
@@ -40,13 +43,33 @@ class Player {
     required this.lastLoginAt,
     required this.stats,
     this.isActive = true,
-   // Propriétés conservées
+    // Propriétés conservées
     this.isOnline = false,
     this.inGame = false,
     this.currentGameId,
     List<String>? achievements,
     this.statusMessage = '',
+    // NOUVELLES PROPRIÉTÉS - SUPPRIMER totalPlayers
+    this.globalRank = 0,        // 0 = non classé
+    required this.lastRankUpdate,
   }) : achievements = achievements ?? [];
+
+  // NOUVEAU GETTER : Vérifier si le rang est à jour
+  bool get isRankUpdatedToday {
+    final now = DateTime.now();
+    return lastRankUpdate.year == now.year &&
+           lastRankUpdate.month == now.month &&
+           lastRankUpdate.day == now.day;
+  }
+
+  // NOUVEAU GETTER : Formater le rang pour l'affichage
+  String get rankDisplay {
+    if (globalRank == 0) return 'Non classé';
+    if (globalRank == 1) return '🥇 1er';
+    if (globalRank == 2) return '🥈 2ème';
+    if (globalRank == 3) return '🥉 3ème';
+    return '#$globalRank';
+  }
 
   // Avatar à afficher (image prioritaire, sinon emoji)
   String get displayAvatar => avatarUrl ?? defaultEmoji;
@@ -92,6 +115,9 @@ class Player {
       'currentGameId': currentGameId,
       'achievements': achievements,
       'statusMessage': statusMessage,
+      // MODIFICATION : Supprimer totalPlayers
+      'globalRank': globalRank,
+      'lastRankUpdate': lastRankUpdate.millisecondsSinceEpoch,
     };
   }
 
@@ -118,6 +144,11 @@ class Player {
       currentGameId: map['currentGameId'],
       achievements: List<String>.from(map['achievements'] ?? []),
       statusMessage: map['statusMessage'] ?? '',
+      // MODIFICATION : Supprimer totalPlayers
+      globalRank: map['globalRank'] ?? 0,
+      lastRankUpdate: DateTime.fromMillisecondsSinceEpoch(
+        map['lastRankUpdate'] ?? DateTime.now().millisecondsSinceEpoch
+      ),
     );
   }
 
@@ -136,6 +167,9 @@ class Player {
     DateTime? lastLoginAt,
     UserStats? stats,
     bool? isActive,
+    // MODIFICATION : Supprimer totalPlayers
+    int? globalRank,
+    DateTime? lastRankUpdate,
   }) {
     return Player(
       id: this.id,
@@ -153,42 +187,47 @@ class Player {
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       stats: stats ?? this.stats,
       isActive: isActive ?? this.isActive,
-  ) ;
+      // MODIFICATION : Supprimer totalPlayers
+      globalRank: globalRank ?? this.globalRank,
+      lastRankUpdate: lastRankUpdate ?? this.lastRankUpdate,
+    );
   }
-  // Créer un joueur à partir d'infos de base pour les notifications de messages
-factory Player.fromBasicInfo({
-  required String id,
-  required String username,
-  String? avatarUrl,
-  String defaultEmoji = '👤',
-  String? email,
-  required createdAt,
-}) {
-  final now = DateTime.now();
-  return Player(
-    id: id,
-    username: username,
-    email: email ?? '',
-    avatarUrl: avatarUrl,
-    defaultEmoji: defaultEmoji,
-    role: UserRole.player,
-    totalPoints: 0,
-    gamesPlayed: 0,
-    gamesWon: 0,
-    gamesLost: 0,
-    gamesDraw: 0,
-    createdAt: createdAt,
-    lastLoginAt: now,
-    stats: UserStats(),
-    isActive: true,
-    isOnline: false,
-    inGame: false,
-    currentGameId: null,
-    achievements: [],
-    statusMessage: '',
-  );
-}
 
+  // Créer un joueur à partir d'infos de base pour les notifications de messages
+  factory Player.fromBasicInfo({
+    required String id,
+    required String username,
+    String? avatarUrl,
+    String defaultEmoji = '👤',
+    String? email,
+    required createdAt,
+  }) {
+    final now = DateTime.now();
+    return Player(
+      id: id,
+      username: username,
+      email: email ?? '',
+      avatarUrl: avatarUrl,
+      defaultEmoji: defaultEmoji,
+      role: UserRole.player,
+      totalPoints: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      gamesDraw: 0,
+      createdAt: createdAt,
+      lastLoginAt: now,
+      stats: UserStats(),
+      isActive: true,
+      isOnline: false,
+      inGame: false,
+      currentGameId: null,
+      achievements: [],
+      statusMessage: '',
+      globalRank: 0,
+      lastRankUpdate: now,
+    );
+  }
 }
 
 // ============================================
@@ -276,7 +315,4 @@ class UserStats {
       feedbacksLiked: feedbacksLiked ?? this.feedbacksLiked,
     );
   }
-
-  
 }
-

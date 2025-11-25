@@ -115,7 +115,8 @@ class _SignupScreenState extends State<SignupScreen> {
       isOnline: true,
       inGame: false,
       achievements: [],
-      statusMessage: 'Nouveau joueur !',
+      statusMessage: 'Nouveau joueur !', 
+      lastRankUpdate: DateTime.now(),
     );
 
     await _firestore.collection('users').doc(user.uid).set(player.toMap());

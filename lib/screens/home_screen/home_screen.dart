@@ -26,11 +26,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Map<String, dynamic>> _dailyRanking = [];
   List<Map<String, dynamic>> _weeklyRanking = [];
   List<Map<String, dynamic>> _monthlyRanking = [];
+   List<Map<String, dynamic>> _globalRanking = [];
   bool _isLoading = true;
   String? _errorMessage;
   StreamSubscription? _dailySubscription;
   StreamSubscription? _weeklySubscription;
   StreamSubscription? _monthlySubscription;
+  StreamSubscription? _globalSubscription;
 
   @override
   void initState() {
@@ -78,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _loadRealTimeRankings() {
     try {
       // Classement du jour
-      _dailySubscription = RankingService.getDailyRanking(limit: 5).listen(
+      _dailySubscription = RankingService.getDailyRanking(limit: 10).listen(
         (players) {
           try {
             final formatted = RankingService.formatRankingData(players, 'daily');
@@ -101,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
 
       // Classement de la semaine
-      _weeklySubscription = RankingService.getWeeklyRanking(limit: 5).listen(
+      _weeklySubscription = RankingService.getWeeklyRanking(limit: 10).listen(
         (players) {
           try {
             final formatted = RankingService.formatRankingData(players, 'weekly');
@@ -124,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
 
       // Classement du mois
-      _monthlySubscription = RankingService.getMonthlyRanking(limit: 5).listen(
+      _monthlySubscription = RankingService.getMonthlyRanking(limit: 10).listen(
         (players) {
           try {
             final formatted = RankingService.formatRankingData(players, 'monthly');
@@ -142,6 +144,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         onError: (error) {
           print('Erreur stream classement mois: $error');
           _handleError('Erreur connexion classement mois');
+        },
+        cancelOnError: false,
+      );
+
+        // Classement global (tous les temps)
+      _globalSubscription = RankingService.getGlobalRanking(limit: 10).listen(
+        (players) {
+          try {
+            final formatted = RankingService.formatRankingData(players, 'global');
+            if (mounted) {
+              setState(() {
+                _globalRanking = formatted['players'];
+                _isLoading = false;
+              });
+            }
+          } catch (e) {
+            print('Erreur formatage classement global: $e');
+            _handleError('Erreur de formatage des données');
+          }
+        },
+        onError: (error) {
+          print('Erreur stream classement global: $error');
+          _handleError('Erreur connexion classement global');
         },
         cancelOnError: false,
       );
@@ -204,6 +229,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _dailySubscription?.cancel();
     _weeklySubscription?.cancel();
     _monthlySubscription?.cancel();
+    _globalSubscription?.cancel(); 
     super.dispose();
   }
 
@@ -756,13 +782,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       children: [
                         _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
                         SizedBox(height: 40),
-                        _buildRankingSection('Meilleurs joueurs de la semaine', _weeklyRanking, Color(0xFFe040fb)),
+                        _buildRankingSection('Meilleurs joueurs de la semaine', _weeklyRanking, Color.fromARGB(255, 255, 0, 183)),
                         SizedBox(height: 40),
-                        _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking, Color(0xFFFFD700)),
+                        _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking,  Color(0xFFe040fb)),
+                        SizedBox(height: 40),
+                        _buildRankingSection('Meilleurs joueurs de Shikaku', _globalRanking, Color(0xFFFFD700)),
                       ],
                     ),
                   
-                  SizedBox(height: 80),
+                  SizedBox(height: 40),
                 ],
               ),
             ),
@@ -829,9 +857,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
         SizedBox(height: 40),
-        _buildRankingSectionShimmer('Meilleurs joueurs de la semaine', Color(0xFFe040fb)),
+        _buildRankingSectionShimmer('Meilleurs joueurs de la semaine', Color.fromARGB(255, 255, 0, 183)),
         SizedBox(height: 40),
-        _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFFFD700)),
+        _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFe040fb)),
+        SizedBox(height: 40),
+        // NOUVEAU : Shimmer pour le classement global
+        _buildRankingSectionShimmer('Meilleurs joueurs de Shikaku', Color(0xFFFFD700)),
       ],
     );
   }
