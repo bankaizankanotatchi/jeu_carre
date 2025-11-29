@@ -430,7 +430,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _timerInitialized = true;
   }
 
-void _startListeningToGameUpdates() {
+  void _startListeningToGameUpdates() {
   if (_gameId == null) return;
   
   _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
@@ -506,47 +506,6 @@ void _startListeningToGameUpdates() {
   });
 }
 
-// void _handleMissedTurnFromFirestore(String playerId) {
-//   if (!_isOnlineGame || _gameId == null || isGameFinished) return;
-  
-//   print('🔄🚨 TOUR MANQUÉ DÉTECTÉ depuis Firestore pour: $playerId');
-  
-//   // 🎯 CORRECTION: TOUJOURS TRAITER LE TOUR MANQUÉ, PEU IMPORTE LE JOUEUR
-//   final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
-//   final newMissedTurns = currentMissedTurns + 1;
-  
-//   print('📊 COMPTAGE TOURS MANQUÉS:');
-//   print('  - Joueur: $playerId');
-//   print('  - Actuel: $currentMissedTurns');
-//   print('  - Nouveau: $newMissedTurns');
-//   print('  - Seuil: 3 tours');
-  
-//   // 🎯 VÉRIFIER SI ON ATTEINT 3 TOURS MANQUÉS
-//   if (newMissedTurns >= 3) {
-//     print('🏁🚨 3 TOURS MANQUÉS DÉTECTÉS - Fin de partie pour: $playerId');
-//     _endGameByMissedTurns(playerId);
-//     return;
-//   }
-  
-//   // 🎯 PRÉPARER LA MAP POUR FIRESTORE
-//   final updatedMissedTurns = {
-//     ...?widget.existingGame?.consecutiveMissedTurns,
-//     playerId: newMissedTurns
-//   };
-  
-//   print('📊 ENVOI À FIRESTORE: $updatedMissedTurns');
-  
-//   try {
-//     GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
-//     print('✅ Tours manqués envoyés à Firestore');
-//   } catch (e) {
-//     print('❌ Erreur envoi tours manqués: $e');
-//   }
-  
-//   _switchPlayer();
-  
-//   print('✅ Tour manqué traité avec succès pour: $playerId');
-// } 
   
   void _handleMissedTurnFromFirestore(String playerId, Map<String, dynamic> firestoreGame) {
     if (!_isOnlineGame || _gameId == null || isGameFinished) return;
