@@ -136,34 +136,34 @@ class _MatchRequestNotificationState extends State<MatchRequestNotification>
                 Row(
                   children: [
                     // Avatar du joueur
-                                    Container(
-  width: 60,
-  height: 60,
-  decoration: BoxDecoration(
-    shape: BoxShape.circle,
-    gradient: LinearGradient(
-      colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-    ),
-    border: Border.all(color: Colors.white, width: 3),
-    boxShadow: [
-      BoxShadow(
-        color: Color(0xFF00d4ff).withOpacity(0.5),
-        blurRadius: 15,
-        spreadRadius: 3,
-      ),
-    ],
-  ),
-  child: ClipOval( // Force le clip circulaire
-    child:Image.network(
-            widget.fromPlayer.displayAvatar,
-            fit: BoxFit.cover,
-            width: 60,
-            height: 60,
-            errorBuilder: (context, error, stackTrace) => 
-              Icon(Icons.person, size: 20, color: Colors.white),
-          )
-  ),
-),
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+                          ),
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFF00d4ff).withOpacity(0.5),
+                              blurRadius: 15,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: ClipOval( // Force le clip circulaire
+                          child:Image.network(
+                                  widget.fromPlayer.displayAvatar,
+                                  fit: BoxFit.cover,
+                                  width: 60,
+                                  height: 60,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    Icon(Icons.person, size: 20, color: Colors.white),
+                                )
+                        ),
+                      ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(

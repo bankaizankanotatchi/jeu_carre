@@ -24,13 +24,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   // Données de classement
   List<Map<String, dynamic>> _dailyRanking = [];
-  List<Map<String, dynamic>> _weeklyRanking = [];
   List<Map<String, dynamic>> _monthlyRanking = [];
    List<Map<String, dynamic>> _globalRanking = [];
   bool _isLoading = true;
   String? _errorMessage;
   StreamSubscription? _dailySubscription;
-  StreamSubscription? _weeklySubscription;
   StreamSubscription? _monthlySubscription;
   StreamSubscription? _globalSubscription;
 
@@ -72,7 +70,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _loadRealTimeRankings();
 
     } catch (e) {
-      print('Erreur initialisation classements: $e');
       _handleError('Erreur de chargement des classements');
     }
   }
@@ -91,36 +88,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               });
             }
           } catch (e) {
-            print('Erreur formatage classement jour: $e');
             _handleError('Erreur de formatage des données');
           }
         },
         onError: (error) {
-          print('Erreur stream classement jour: $error');
           _handleError('Erreur connexion classement jour');
-        },
-        cancelOnError: false,
-      );
-
-      // Classement de la semaine
-      _weeklySubscription = RankingService.getWeeklyRanking(limit: 10).listen(
-        (players) {
-          try {
-            final formatted = RankingService.formatRankingData(players, 'weekly');
-            if (mounted) {
-              setState(() {
-                _weeklyRanking = formatted['players'];
-                _isLoading = false;
-              });
-            }
-          } catch (e) {
-            print('Erreur formatage classement semaine: $e');
-            _handleError('Erreur de formatage des données');
-          }
-        },
-        onError: (error) {
-          print('Erreur stream classement semaine: $error');
-          _handleError('Erreur connexion classement semaine');
         },
         cancelOnError: false,
       );
@@ -137,12 +109,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               });
             }
           } catch (e) {
-            print('Erreur formatage classement mois: $e');
             _handleError('Erreur de formatage des données');
           }
         },
         onError: (error) {
-          print('Erreur stream classement mois: $error');
           _handleError('Erreur connexion classement mois');
         },
         cancelOnError: false,
@@ -160,36 +130,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               });
             }
           } catch (e) {
-            print('Erreur formatage classement global: $e');
             _handleError('Erreur de formatage des données');
           }
         },
         onError: (error) {
-          print('Erreur stream classement global: $error');
           _handleError('Erreur connexion classement global');
         },
         cancelOnError: false,
       );
 
     } catch (e) {
-      print('Erreur initialisation streams: $e');
       _handleError('Erreur de connexion aux serveurs');
     }
   }
-
-//   void _viewUserProfile(Map<String, dynamic> user) {
-//   Navigator.push(
-//     context,
-//     MaterialPageRoute(
-//       builder: (context) => OpponentProfileScreen(opponent: {
-//         'id': user['id'],
-//         'username': user['username'],
-//         'avatar': user['displayAvatar'],
-//         'score': user['totalPoints'],
-//       }),
-//     ),
-//   );
-// }
 
 
   void _handleError(String message) {
@@ -227,7 +180,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _animationController.dispose();
     _scrollController.dispose();
     _dailySubscription?.cancel();
-    _weeklySubscription?.cancel();
     _monthlySubscription?.cancel();
     _globalSubscription?.cancel(); 
     super.dispose();
@@ -337,87 +289,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     );
   }
-
-  // Widget _buildLoadingStats() {
-  //   return Column(
-  //     children: [
-  //       _buildStatItemShimmer('Joueurs inscrits'),
-  //       _buildStatItemShimmer('Parties jouées'),
-  //       _buildStatItemShimmer('Actifs aujourd\'hui'),
-  //       _buildStatItemShimmer('Points totaux'),
-  //     ],
-  //   );
-  // }
-
-  // Widget _buildStatsError() {
-  //   return Column(
-  //     children: [
-  //       _buildStatItem('Joueurs inscrits', '--'),
-  //       _buildStatItem('Parties jouées', '--'),
-  //       _buildStatItem('Actifs aujourd\'hui', '--'),
-  //       _buildStatItem('Points totaux', '--'),
-  //     ],
-  //   );
-  // }
-
-  // Widget _buildStatItemShimmer(String label) {
-  //   return Container(
-  //     margin: EdgeInsets.symmetric(vertical: 4),
-  //     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-  //     decoration: BoxDecoration(
-  //       color: Colors.white.withOpacity(0.1),
-  //       borderRadius: BorderRadius.circular(10),
-  //     ),
-  //     child: Row(
-  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //       children: [
-  //         Text(
-  //           label,
-  //           style: TextStyle(
-  //             color: Colors.white.withOpacity(0.8),
-  //             fontSize: 12,
-  //           ),
-  //         ),
-  //         Container(
-  //           width: 40,
-  //           height: 12,
-  //           color: Colors.white.withOpacity(0.3),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildStatItem(String label, String value) {
-  //   return Container(
-  //     margin: EdgeInsets.symmetric(vertical: 4),
-  //     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-  //     decoration: BoxDecoration(
-  //       color: Colors.white.withOpacity(0.1),
-  //       borderRadius: BorderRadius.circular(10),
-  //     ),
-  //     child: Row(
-  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //       children: [
-  //         Text(
-  //           label,
-  //           style: TextStyle(
-  //             color: Colors.white.withOpacity(0.8),
-  //             fontSize: 12,
-  //           ),
-  //         ),
-  //         Text(
-  //           value,
-  //           style: TextStyle(
-  //             color: Color(0xFF00d4ff),
-  //             fontSize: 12,
-  //             fontWeight: FontWeight.w700,
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 
   Widget _buildSimpleGameModeCard({
     required String title,
@@ -782,8 +653,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       children: [
                         _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
                         SizedBox(height: 40),
-                        _buildRankingSection('Meilleurs joueurs de la semaine', _weeklyRanking, Color.fromARGB(255, 255, 0, 183)),
-                        SizedBox(height: 40),
                         _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking,  Color(0xFFe040fb)),
                         SizedBox(height: 40),
                         _buildRankingSection('Meilleurs joueurs de Shikaku', _globalRanking, Color(0xFFFFD700)),
@@ -857,11 +726,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
         SizedBox(height: 40),
-        _buildRankingSectionShimmer('Meilleurs joueurs de la semaine', Color.fromARGB(255, 255, 0, 183)),
-        SizedBox(height: 40),
         _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFe040fb)),
         SizedBox(height: 40),
-        // NOUVEAU : Shimmer pour le classement global
         _buildRankingSectionShimmer('Meilleurs joueurs de Shikaku', Color(0xFFFFD700)),
       ],
     );

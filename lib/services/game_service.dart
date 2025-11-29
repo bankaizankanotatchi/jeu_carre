@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/game_result.dart';
 import 'package:jeu_carre/models/player.dart';
-import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/services/ranking_service.dart';
 
 class GameService {
@@ -191,26 +191,45 @@ class GameService {
     }
   }
 
-  /// Mettre à jour les tours manqués consécutifs
-  static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int> consecutiveMissedTurns) async {
-    try {
-      await gamesCollection.doc(gameId).update({
-        'consecutiveMissedTurns': consecutiveMissedTurns,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      });
+/// Mettre à jour les tours manqués consécutifs - VERSION CORRIGÉE
+static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int> consecutiveMissedTurns) async {
+  try {
+    print('🔄 updateConsecutiveMissedTurns appelé');
+    print('📊 Tours manqués reçus: $consecutiveMissedTurns');
+    
+    await gamesCollection.doc(gameId).update({
+      'consecutiveMissedTurns': consecutiveMissedTurns,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    
+    // 🎯 RÉCUPÉRER LA PARTIE POUR VÉRIFICATION
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) return;
+    
+    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    print('📊 Tours manqués dans Firestore: ${game.consecutiveMissedTurns}');
+    
+    // Vérifier si un joueur a manqué 3 tours
+    for (final entry in consecutiveMissedTurns.entries) {
+      print('🔍 Vérification joueur ${entry.key}: ${entry.value}/3 tours manqués');
       
-      // Vérifier si un joueur a manqué 3 tours
-      for (final entry in consecutiveMissedTurns.entries) {
-        if (entry.value >= 3) {
-          await _finishGameByMissedTurns(gameId, entry.key);
-          break;
-        }
+      if (entry.value >= 3) {
+        print('🎯🚨 3 TOURS MANQUÉS DÉTECTÉS pour le joueur: ${entry.key}');
+        print('🎯🚨 Déclenchement fin de partie...');
+        
+        // 🎯 IDENTIFIER LE JOUEUR QUI A MANQUÉ LES TOURS
+        final playerWhoMissed = entry.key;
+        await _finishGameByMissedTurns(gameId, playerWhoMissed);
+        return; // 🚫 ON S'ARRÊTE APRÈS AVOIR TRAITÉ LE PREMIER JOUEUR À 3 TOURS
       }
-    } catch (e) {
-      print('Erreur mise à jour tours manqués: $e');
     }
+    
+    print('✅ Aucun joueur n\'a atteint 3 tours manqués');
+  } catch (e) {
+    print('❌ Erreur mise à jour tours manqués: $e');
   }
-
+}
+  
   // ============================================================
   // GESTION DES POINTS ET CARRÉS
   // ============================================================
@@ -430,38 +449,100 @@ static Future<void> finishGameWithReason(String gameId, {String? winnerId, requi
     }
   }
 
-  /// Fin de partie par tours manqués
-  static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMissed) async {
-    try {
-      print('⏱️ Tentative fin de partie par tours manqués: $gameId, joueur: $playerWhoMissed');
-      final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) {
-        print('❌ Partie non trouvée: $gameId');
-        return;
-      }
-
-      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-      
-      if (game.status == GameStatus.finished) {
-        print('ℹ️ Partie déjà terminée: $gameId');
-        return;
-      }
-
-      final winnerId = playerWhoMissed == game.player1Id ? game.player2Id : game.player1Id;
-      print('🏆 Victoire par abandon: $winnerId (adversaire: $playerWhoMissed)');
-
-      await finishGameWithReason(
-        gameId, 
-        winnerId: winnerId, 
-        endReason: GameEndReason.consecutiveMissedTurns
-      );
-      print('✅ Fin de partie par tours manqués traitée: $gameId');
-    } catch (e) {
-      print('❌ Erreur fin de partie par tours manqués: $e');
+/// Fin de partie par tours manqués - VERSION COMPLÈTEMENT CORRIGÉE
+static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMissed) async {
+  try {
+    print('🎯 DÉBUT _finishGameByMissedTurns pour $playerWhoMissed');
+    
+    // 🎯 RÉCUPÉRER LA PARTIE ACTUALISÉE
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) {
+      print('❌ Partie non trouvée: $gameId');
+      return;
     }
-  }
 
-  // ============================================================
+    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    
+    // 🚫 VÉRIFIER QUE LA PARTIE N'EST PAS DÉJÀ TERMINÉE
+    if (game.status == GameStatus.finished) {
+      print('ℹ️ Partie déjà terminée: $gameId');
+      return;
+    }
+
+    print('🔍 État de la partie AVANT transfert:');
+    print('  - Player1 (${game.player1Id}): ${game.scores[game.player1Id]} points');
+    print('  - Player2 (${game.player2Id}): ${game.scores[game.player2Id]} points');
+    print('  - Joueur qui a manqué: $playerWhoMissed');
+
+    // 🎯 IDENTIFIER LE GAGNANT (l'adversaire)
+    final winnerId = playerWhoMissed == game.player1Id ? game.player2Id : game.player1Id;
+    
+    if (winnerId == null) {
+      print('❌ Impossible de déterminer le gagnant');
+      return;
+    }
+
+    // 🎯 CALCULER LES NOUVEAUX SCORES
+    final loserScore = game.scores[playerWhoMissed] ?? 0;
+    final winnerScore = game.scores[winnerId] ?? 0;
+    final newWinnerScore = winnerScore + loserScore + 1;
+    
+    print('💰 CALCUL SCORES:');
+    print('  - Score gagnant initial: $winnerScore');
+    print('  - Score perdant: $loserScore');
+    print('  - Score gagnant final: $newWinnerScore (avec bonus +1)');
+
+    // 🎯 CRÉER LES SCORES FINAUX
+    final finalScores = {
+      winnerId: newWinnerScore,
+      playerWhoMissed: 0, // 🎯 PERDANT À 0 POINTS
+    };
+
+    print('🏆 SCORES FINAUX: $finalScores');
+
+    // 🎯 METTRE À JOUR LA PARTIE EN UNE SEULE OPÉRATION ATOMIQUE
+    final updateData = {
+      'scores': finalScores,
+      'status': GameStatus.finished.toString(),
+      'winnerId': winnerId,
+      'endReason': GameEndReason.consecutiveMissedTurns.toString(),
+      'finishedAt': DateTime.now().millisecondsSinceEpoch,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+
+    print('📝 MISE À JOUR FIRESTORE: $updateData');
+
+    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
+    await gamesCollection.doc(gameId).update(updateData);
+    print('✅ Partie mise à jour dans Firestore');
+
+    // 🎯 ATTENDRE LA SYNCHRONISATION PUIS RÉCUPÉRER LA PARTIE MISE À JOUR
+    await Future.delayed(Duration(milliseconds: 500));
+    
+    final updatedGameDoc = await gamesCollection.doc(gameId).get();
+    final updatedGame = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
+    
+    print('🔍 État de la partie APRÈS transfert:');
+    print('  - Player1 (${updatedGame.player1Id}): ${updatedGame.scores[updatedGame.player1Id]} points');
+    print('  - Player2 (${updatedGame.player2Id}): ${updatedGame.scores[updatedGame.player2Id]} points');
+    print('  - Status: ${updatedGame.status}');
+    print('  - Gagnant: ${updatedGame.winnerId}');
+
+    // 🎯 SAUVEGARDER LES RÉSULTATS AVEC LA PARTIE MISE À JOUR
+    if (updatedGame.status == GameStatus.finished) {
+      await _saveGameResults(updatedGame);
+      print('✅ Résultats sauvegardés avec les scores transférés');
+    } else {
+      print('❌ ERREUR: La partie n\'est pas marquée comme terminée après update!');
+    }
+
+  } catch (e) {
+    print('❌ Erreur critique dans _finishGameByMissedTurns: $e');
+    print('❌ Stack trace: ${e.toString()}');
+  }
+}
+
+// ============================================================
   // GESTION DES SPECTATEURS
   // ============================================================
 
@@ -558,6 +639,7 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
     // Ne pas relancer l'exception pour éviter les crashs
   }
 }
+  
   // ============================================================
   // RÉCUPÉRATION DES PARTIES - STREAMS OPTIMISÉS
   // ============================================================

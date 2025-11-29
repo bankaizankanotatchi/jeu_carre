@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/ai_player.dart';
@@ -220,6 +221,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _resultModalShown = false;
   bool _isSpectator = false;
   OverlayEntry? _messageOverlayEntry;
+    // 🆕 SUIVI DES TOURS MANQUÉS
+  Map<String, int> _consecutiveMissedTurns = {
+    'bleu': 0,
+    'rouge': 0
+  };
 
   bool _isPlayerOnLeft(String playerId) {
     if (!_isOnlineGame) return playerId == 'bleu';
@@ -243,10 +249,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _isSpectator = !isPlayer;
       
       if (_isSpectator) {
-        print('👀 Utilisateur connecté en tant que spectateur');
         _joinAsSpectator();
-      } else {
-        print('🎮 Utilisateur connecté en tant que joueur');
       }
     }
   }
@@ -338,15 +341,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     _radarAnimationController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 2000),
     );
     
-    _radarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _radarAnimationController,
-        curve: Curves.easeOut,
-      ),
-    );
+      _radarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _radarAnimationController,
+          curve: Curves.easeOut,
+        ),
+      );
+
 
     // Initialiser les timers après un court délai
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -362,7 +366,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
     
-void _initializeGameData() async {
+  void _initializeGameData() async {
   final currentUser = FirebaseAuth.instance.currentUser;
   if (currentUser != null) {
     _currentUserPlayer = await GameService.getPlayer(currentUser.uid);
@@ -398,7 +402,6 @@ void _initializeGameData() async {
         
     } else {
       // Logique pour les spectateurs - charger les deux joueurs
-      print('👀 Initialisation en mode spectateur');
       
       if (widget.existingGame!.player1Id != null) {
         _currentUserPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
@@ -418,6 +421,7 @@ void _initializeGameData() async {
 
   setState(() {});
 }
+  
   void _initializeTimers() {
     if (_timerInitialized) return;
     
@@ -425,115 +429,148 @@ void _initializeGameData() async {
     _startReflexionTimer();
     _timerInitialized = true;
   }
-    
-  void _startListeningToGameUpdates() {
-    if (_gameId == null) return;
-    
-    _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
-      if (game == null || !mounted) return;
-      
-      print('🔄 Sync Firestore - Status: ${game.status}, Temps: ${game.timeRemaining}');
-      
-      setState(() {
-        points = game.points;
-        squares = game.squares;
-        
-        scores = {
-          'bleu': game.scores[game.player1Id] ?? 0,
-          'rouge': game.scores[game.player2Id] ?? 0,
-        };
-        
-        // Synchroniser le currentPlayer
-        if (game.currentPlayer == game.player1Id) {
-          currentPlayer = 'bleu';
-        } else if (game.currentPlayer == game.player2Id) {
-          currentPlayer = 'rouge';
-        }
-        
-        _isMyTurn = (currentPlayer == _myPlayerColor);
-        _timeRemaining = game.timeRemaining;
-        _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
-        
-        // SYNCHRONISATION DU TEMPS DE RÉFLEXION
-        if (game.reflexionTimeRemaining != null) {
-          final currentPlayerId = currentPlayer == 'bleu' 
-              ? widget.existingGame!.player1Id! 
-              : widget.existingGame!.player2Id!;
-          
-          final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
-          if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
-            print('🎯 Mise à jour temps réflexion: $reflexionTime');
-            _reflexionTimeRemaining = reflexionTime;
-          }
-        }
-        
-        // Gestion fin de partie - AMÉLIORATION ICI
-        final wasGameFinished = isGameFinished;
-        isGameFinished = game.status == GameStatus.finished;
-        
-        if (isGameFinished && !wasGameFinished) {
-          print('🎯 Partie terminée détectée via Firestore - Scores: $scores');
-          _cancelAllTimers();
-          
-          // Mettre à jour les scores finaux depuis Firestore
-          scores = {
-            'bleu': game.scores[game.player1Id] ?? 0,
-            'rouge': game.scores[game.player2Id] ?? 0,
-          };
-          
-          if (!_resultModalShown) {
-            print('🚀 Déclenchement modal de résultat...');
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_resultModalShown) {
-                _showResultModal();
-              }
-            });
-          }
-        }
-      });
-    }, onError: (error) {
-      print('❌ Erreur écoute partie: $error');
-    });
-  }
 
-  void _handleMissedTurnFromFirestore(String playerId) {
-    if (!_isOnlineGame || _gameId == null) return;
+void _startListeningToGameUpdates() {
+  if (_gameId == null) return;
+  
+  _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
+    if (game == null || !mounted) return;
     
-    // Vérifier que c'est bien le tour de ce joueur
-    final isCurrentPlayer = (playerId == widget.existingGame!.player1Id && currentPlayer == 'bleu') ||
-                           (playerId == widget.existingGame!.player2Id && currentPlayer == 'rouge');
     
-    if (isCurrentPlayer && !isGameFinished) {
-      print('🔄 Tour manqué détecté depuis Firestore pour: $playerId');
+    // 🎯 DÉTECTER LES NOUVEAUX POINTS ADVERSES
+    final newPoints = game.points;
+    final oldPointsCount = points.length;
+    
+    setState(() {
+      points = game.points;
+      squares = game.squares;
       
-      final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
-      final newMissedTurns = currentMissedTurns + 1;
-      
-      final updatedMissedTurns = {
-        ...widget.existingGame!.consecutiveMissedTurns,
-        playerId: newMissedTurns
+      scores = {
+        'bleu': game.scores[game.player1Id] ?? 0,
+        'rouge': game.scores[game.player2Id] ?? 0,
       };
       
-      // UTILISER UN TRY-CATCH POUR ÉVITER LES ERREURS BLOQUANTES
-      try {
-        GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
-      } catch (e) {
-        print('⚠️ Erreur non critique mise à jour tours manqués: $e');
+      // Synchroniser le currentPlayer
+      if (game.currentPlayer == game.player1Id) {
+        currentPlayer = 'bleu';
+      } else if (game.currentPlayer == game.player2Id) {
+        currentPlayer = 'rouge';
       }
       
-      // Changer de joueur
-      final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-      final nextPlayerId = nextPlayer == 'bleu' 
-          ? widget.existingGame!.player1Id! 
-          : widget.existingGame!.player2Id!;
+      _isMyTurn = (currentPlayer == _myPlayerColor);
+      _timeRemaining = game.timeRemaining;
+      _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
       
-      try {
-        GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
-      } catch (e) {
-        print('⚠️ Erreur non critique changement joueur: $e');
+      // 🔥 DÉTECTION DU NOUVEAU POINT ADVERSÉ
+      if (newPoints.length > oldPointsCount && oldPointsCount > 0) {
+        final newPoint = newPoints.last;
+        
+        // Vérifier si c'est un coup adverse
+        final isOpponentMove = (_myPlayerColor == 'bleu' && newPoint.playerId == widget.existingGame!.player2Id) ||
+                              (_myPlayerColor == 'rouge' && newPoint.playerId == widget.existingGame!.player1Id);
+        
+        if (isOpponentMove) {
+          _startRadarAnimation(newPoint);
+        }
       }
-    }
+      
+      // 🔥 SYNCHRONISATION DU TEMPS DE RÉFLEXION
+      if (game.reflexionTimeRemaining != null) {
+        final currentPlayerId = currentPlayer == 'bleu' 
+            ? widget.existingGame!.player1Id! 
+            : widget.existingGame!.player2Id!;
+        
+        final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
+        if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
+          _reflexionTimeRemaining = reflexionTime;
+        }
+      }
+      
+      // Gestion fin de partie
+      final wasGameFinished = isGameFinished;
+      isGameFinished = game.status == GameStatus.finished;
+      
+      if (isGameFinished && !wasGameFinished) {
+        _cancelAllTimers();
+        
+        if (!_resultModalShown) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_resultModalShown) {
+              _showResultModal();
+            }
+          });
+        }
+      }
+    });
+  }, onError: (error) {
+  });
+}
+
+// void _handleMissedTurnFromFirestore(String playerId) {
+//   if (!_isOnlineGame || _gameId == null || isGameFinished) return;
+  
+//   print('🔄🚨 TOUR MANQUÉ DÉTECTÉ depuis Firestore pour: $playerId');
+  
+//   // 🎯 CORRECTION: TOUJOURS TRAITER LE TOUR MANQUÉ, PEU IMPORTE LE JOUEUR
+//   final currentMissedTurns = widget.existingGame?.consecutiveMissedTurns[playerId] ?? 0;
+//   final newMissedTurns = currentMissedTurns + 1;
+  
+//   print('📊 COMPTAGE TOURS MANQUÉS:');
+//   print('  - Joueur: $playerId');
+//   print('  - Actuel: $currentMissedTurns');
+//   print('  - Nouveau: $newMissedTurns');
+//   print('  - Seuil: 3 tours');
+  
+//   // 🎯 VÉRIFIER SI ON ATTEINT 3 TOURS MANQUÉS
+//   if (newMissedTurns >= 3) {
+//     print('🏁🚨 3 TOURS MANQUÉS DÉTECTÉS - Fin de partie pour: $playerId');
+//     _endGameByMissedTurns(playerId);
+//     return;
+//   }
+  
+//   // 🎯 PRÉPARER LA MAP POUR FIRESTORE
+//   final updatedMissedTurns = {
+//     ...?widget.existingGame?.consecutiveMissedTurns,
+//     playerId: newMissedTurns
+//   };
+  
+//   print('📊 ENVOI À FIRESTORE: $updatedMissedTurns');
+  
+//   try {
+//     GameService.updateConsecutiveMissedTurns(_gameId!, updatedMissedTurns);
+//     print('✅ Tours manqués envoyés à Firestore');
+//   } catch (e) {
+//     print('❌ Erreur envoi tours manqués: $e');
+//   }
+  
+//   _switchPlayer();
+  
+//   print('✅ Tour manqué traité avec succès pour: $playerId');
+// } 
+  
+  void _handleMissedTurnFromFirestore(String playerId, Map<String, dynamic> firestoreGame) {
+    if (!_isOnlineGame || _gameId == null || isGameFinished) return;
+
+    print('🔄🚨 TOUR MANQUÉ pour $playerId');
+
+    final serverTurns = Map<String, int>.from(
+      firestoreGame['consecutiveMissedTurns'] ?? {}
+    );
+
+    final current = serverTurns[playerId] ?? 0;
+    final newValue = current + 1;
+
+    print("📊 FIRESTORE: $current → $newValue");
+
+    serverTurns[playerId] = newValue;
+
+    print('📡 Envoi Firestore: $serverTurns');
+
+    GameService.updateConsecutiveMissedTurns(_gameId!, serverTurns);
+
+    _switchPlayer();
   }
+
 
   void _loadSpectators() {
     if (_gameId == null) return;
@@ -569,7 +606,7 @@ void _initializeGameData() async {
     _scoreAnimationController.dispose();
     _radarAnimationController.dispose();
     _gameStreamSubscription?.cancel();
-    
+
     // 🆕 Nettoyer l'overlay de message s'il existe
     _messageOverlayEntry?.remove();
     
@@ -589,7 +626,7 @@ void _initializeGameData() async {
   void _startRadarAnimation(GridPoint point) {
     _lastPlayedPoint = point;
     _radarAnimationController.reset();
-    _radarAnimationController.forward();
+    _radarAnimationController.repeat(); // 👈 Ça boucle à l'infini !
   }
 
   void _startAITurn() {
@@ -671,7 +708,6 @@ void _initializeGameData() async {
     _timeRemaining = widget.gameDuration;
     _progressValue = 0.0;
     _reflexionTimeRemaining = widget.reflexionTime;
-    _transformationController.value = Matrix4.identity();
   }
 
   void _startGameTimer() {
@@ -698,6 +734,8 @@ void _initializeGameData() async {
     });
   }
 
+
+
   void _startReflexionTimer() {
     _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -716,8 +754,17 @@ void _initializeGameData() async {
           }
         } else {
           // Temps écoulé
-          print('⏱️ Temps réflexion écoulé (maître)');
-          _handleMissedTurnFromFirestore(_currentUserId!);
+          FirebaseFirestore.instance
+          .collection("games")
+          .doc(_gameId)
+          .get()
+          .then((doc) {
+            if (!doc.exists) return;
+
+            final data = doc.data()!;
+            _handleMissedTurnFromFirestore(_currentUserId!, data);
+          });
+
         }
       } else if (!_isOnlineGame) {
         // Logique locale pour les parties hors ligne
@@ -732,24 +779,40 @@ void _initializeGameData() async {
     });
   }
 
-  void _handleMissedTurn() {
-    if (_isOnlineGame && _gameId != null && _currentUserId != null) {
-      // Pour les parties en ligne, utiliser la méthode Firestore
-      _handleMissedTurnFromFirestore(_currentUserId!);
-    } else {
-      // Logique locale existante...
-      final currentPlayerId = currentPlayer;
-      final currentMissedTurns = 0;
-      final newMissedTurns = currentMissedTurns + 1;
-      
-      if (newMissedTurns >= 3) {
-        _endGameByMissedTurns(currentPlayerId);
-        return;
-      }
-      
-      _switchPlayer();
+void _handleMissedTurn() {
+  if (_isOnlineGame && _gameId != null && _currentUserId != null) {
+    FirebaseFirestore.instance
+    .collection("games")
+    .doc(_gameId)
+    .get()
+    .then((doc) {
+      if (!doc.exists) return;
+
+      final data = doc.data()!;
+      _handleMissedTurnFromFirestore(_currentUserId!, data);
+    });
+
+  } else {
+    // 🆕 LOGIQUE LOCALE CORRIGÉE
+    final currentMissedTurns = _consecutiveMissedTurns[currentPlayer] ?? 0;
+    final newMissedTurns = currentMissedTurns + 1;
+    
+    print('🔄 Tour manqué: $currentPlayer - $newMissedTurns/3');
+    
+    // Mettre à jour le compteur
+    setState(() {
+      _consecutiveMissedTurns[currentPlayer] = newMissedTurns;
+    });
+    
+    if (newMissedTurns >= 3) {
+      print('🏁 3 tours manqués - Fin de partie pour: $currentPlayer');
+      _endGameByMissedTurns(currentPlayer);
+      return;
     }
+    
+    _switchPlayer();
   }
+}
 
   void _endGameByMissedTurns(String playerWhoMissed) async {
     print('🏁 Fin de partie par tours manqués: $playerWhoMissed');
@@ -801,6 +864,8 @@ void _initializeGameData() async {
     }
   }
 
+
+
   void _switchPlayer() {
     if (_isOnlineGame) {
       if (_gameId != null && widget.existingGame != null) {
@@ -808,8 +873,6 @@ void _initializeGameData() async {
         final nextPlayerId = nextPlayer == 'bleu' 
             ? widget.existingGame!.player1Id! 
             : widget.existingGame!.player2Id!;
-        
-        print('🔄 Switch vers: $nextPlayer (ID: $nextPlayerId)');
         
         // Mettre à jour le currentPlayer dans Firestore
         GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
@@ -828,15 +891,12 @@ void _initializeGameData() async {
   }
 
   void _endGameByTime() async {
-    print('🏁 Fin de partie par temps écoulé');
     
     if (_isOnlineGame && _gameId != null) {
       try {
         // APPELER DIRECTEMENT LE SERVICE SANS ATTENDRE
         await GameService.updateGameTime(_gameId!, 0);
-        print('✅ Temps mis à jour à 0 dans Firestore');
       } catch (e) {
-        print('❌ Erreur mise à jour temps: $e');
         // FALLBACK: Marquer la partie comme terminée localement
         setState(() {
           isGameFinished = true;
@@ -891,13 +951,20 @@ void _initializeGameData() async {
         : currentPlayer;
     
     final newPoint = GridPoint(x: x, y: y, playerId: playerId);
+
+      if (!_isOnlineGame) {
+    // 🆕 RÉINITIALISER LES TOURS MANQUÉS QUAND LE JOUEUR JOUE
+    setState(() {
+      _consecutiveMissedTurns[currentPlayer] = 0;
+    });
+  }
     
     if (_isOnlineGame && _gameId != null) {
       try {
         await GameService.addPointToGame(_gameId!, newPoint);
         
         final allPoints = [...points, newPoint];
-        final newSquares = GameLogic.checkSquares(allPoints, widget.gridSize, playerId!, x, y);
+        final newSquares = GameLogic.checkSquares(allPoints, widget.gridSize, playerId, x, y);
         
         if (newSquares.isNotEmpty) {
           for (final square in newSquares) {
@@ -966,18 +1033,15 @@ void _initializeGameData() async {
     if (_resultModalShown || !mounted) return;
     _resultModalShown = true;
     
-    print('🎊 AFFICHAGE MODAL - Scores: $scores, En ligne: $_isOnlineGame');
     
     // S'assurer que tous les timers sont arrêtés
     _cancelAllTimers();
     
     Future.delayed(Duration(milliseconds: 500), () {
       if (!mounted) {
-        print('❌ Modal non monté');
         return;
       }
       
-      print('✅ Affichage du modal de résultat...');
       showDialog(
         context: context,
         barrierColor: Colors.black.withOpacity(0.9),
@@ -985,7 +1049,6 @@ void _initializeGameData() async {
         builder: (BuildContext context) => _buildResultModal(),
       ).then((_) {
         _resultModalShown = false;
-        print('🔒 Modal fermé');
       });
     });
   }
@@ -1075,7 +1138,7 @@ void _initializeGameData() async {
                     ),
                     ],
                 SizedBox(height: 20),
-                  if (_isOnlineGame && !isDraw) ...[
+                  if (_isOnlineGame) ...[
                     SizedBox(height: 10),
                     Text(
                       resultMessage,
@@ -1574,7 +1637,7 @@ Widget _buildDrawProfile(String playerName, Color color) {
             _showForfeitConfirmation();
           } else if (value == 'new_game' && !_isOnlineGame) {
             _showNewGameConfirmation();
-          } else if (value == 'leave_spectator' && _isSpectator) {
+          }else if (value == 'leave_spectator' && _isSpectator) {
             _leaveAsSpectatorAndExit();
           }
         },
@@ -1724,8 +1787,6 @@ Widget _buildDrawProfile(String playerName, Color color) {
           loserId!: 0
         };
         
-        print('🎯 Mise à jour scores abandon - Gagnant: ${updatedScores[winnerId]}, Perdant: ${updatedScores[loserId]}');
-        
         // 2. METTRE À JOUR LES SCORES DANS FIRESTORE
         await GameService.updateGameScores(_gameId!, updatedScores);
         
@@ -1736,7 +1797,6 @@ Widget _buildDrawProfile(String playerName, Color color) {
           endReason: GameEndReason.playerSurrendered
         );
         
-        print('✅ Abandon traité avec succès');
         
       } catch (e) {
         print('❌ Erreur lors de l\'abandon: $e');
@@ -1828,7 +1888,7 @@ Widget _buildDrawProfile(String playerName, Color color) {
     );
   }
 
-Widget _buildCompactPlayerScore(String player, int score, String playerName) {
+  Widget _buildCompactPlayerScore(String player, int score, String playerName) {
   final isActive = currentPlayer == player && !isGameFinished;
   final color = _getPlayerColor(player);
 
@@ -1909,6 +1969,7 @@ Widget _buildCompactPlayerScore(String player, int score, String playerName) {
     ),
   );
 }
+  
   Widget _buildSpectatorsSection() {
     return StreamBuilder<List<Player>>(
       stream: _spectatorsStream,
@@ -2299,7 +2360,6 @@ Widget _buildMessageBubble(String message, {required bool isOnLeft, required boo
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isGameFinished && !_resultModalShown) {
-        print('🏁 Build - Partie terminée, déclenchement modal...');
         _showResultModal();
       }
     });

@@ -8,8 +8,8 @@ class MinioStorageService {
     endPoint: 'minio.f2mb.xyz',
     port: 443,
     useSSL: true,
-    accessKey: 'mVsel1QD8kq6anqvssBF',
-    secretKey: 'mcJjROQxqqOoK7mbKyOL97ZxHgw8lj10Eq0LWY7a',
+    accessKey: 'CqG4jGaNTB9d6Ew4GWXx',
+    secretKey: 'vVRFB3RdWqwHT6av4UqfPKKNxdgXDB7XuvN43iyY',
   );
 
   final String _bucketName = 'shikaku';

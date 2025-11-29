@@ -740,6 +740,7 @@ Future<void> _sendMessage() async {
                       ),
               ),
             ),
+            
             SizedBox(width: 8),
           ],
           Expanded(
@@ -1210,9 +1211,6 @@ Future<void> _sendMessage() async {
                   
                   stream: _messagesStream,
                   builder: (context, snapshot) {
-                    print('🔄 StreamBuilder state: ${snapshot.connectionState}');
-                    print('📊 Has data: ${snapshot.hasData}, Data: ${snapshot.data?.length ?? 0} messages');
-                    print('⚠️ Has error: ${snapshot.hasError}, Error: ${snapshot.error}');
                     
                     
                     
@@ -1221,8 +1219,6 @@ Future<void> _sendMessage() async {
                     }
 
                     if (snapshot.hasError) {
-                      print('❌ Error in StreamBuilder: ${snapshot.error}');
-                      print('Stack trace: ${snapshot.stackTrace}');
                       return _buildErrorState();
                     }
 

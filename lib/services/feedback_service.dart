@@ -41,8 +41,8 @@ static Future<Message> createFeedback({
       id: messageId,
       userId: user.uid,
       username: userData?['username'] ?? 'Utilisateur',
-      userAvatarUrl: userData?['avatarUrl'],
-      userDefaultEmoji: userData?['defaultEmoji'] ?? '🎮',
+      // userAvatarUrl: userData?['avatarUrl'],
+      // userDefaultEmoji: userData?['defaultEmoji'] ?? '🎮',
       category: category,
       content: content,
       createdAt: DateTime.now(),
@@ -306,7 +306,6 @@ static Future<Message> createFeedback({
         'totalInteractions': interactionsSnapshot.size,
       };
     } catch (e) {
-      print('Erreur statistiques: $e');
       rethrow;
     }
   }
@@ -344,7 +343,6 @@ static Future<Message> createFeedback({
       // Vérifier si le rôle est admin
       return roleString == 'UserRole.admin';
     } catch (e) {
-      print('Erreur vérification admin: $e');
       return false;
     }
   }
@@ -375,7 +373,6 @@ static Future<Message> createFeedback({
         'isPublic': isPublic,
       });
     } catch (e) {
-      print('Erreur changement visibilité: $e');
       rethrow;
     }
   }

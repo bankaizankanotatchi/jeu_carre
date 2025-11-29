@@ -15,8 +15,6 @@ class RankingService {
       _firestore.collection('games');
   static final CollectionReference _dailyStatsCollection = 
       _firestore.collection('daily_stats');
-  static final CollectionReference _weeklyStatsCollection = 
-      _firestore.collection('weekly_stats');
   static final CollectionReference _monthlyStatsCollection = 
       _firestore.collection('monthly_stats');
 
@@ -32,24 +30,6 @@ class RankingService {
     return _playersCollection
         .where('lastLoginAt', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
         .orderBy('lastLoginAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return Player.fromMap(doc.data() as Map<String, dynamic>);
-          }).toList();
-        });
-  }
-
-  // Récupérer le classement de la semaine
-  static Stream<List<Player>> getWeeklyRanking({int limit = 10}) {
-    final now = DateTime.now();
-    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final startOfWeekDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-    
-    return _playersCollection
-        .where('stats.weeklyPoints', isGreaterThan: 0)
-        .orderBy('stats.weeklyPoints', descending: true)
         .limit(limit)
         .snapshots()
         .map((snapshot) {
@@ -218,16 +198,6 @@ class RankingService {
     }
   }
 
-  /// Fonction pour compter le nombre total de joueurs
-  static Future<int?> getTotalPlayersCount() async {
-    try {
-      final countSnapshot = await _playersCollection.count().get();
-      return countSnapshot.count;
-    } catch (e) {
-      print('❌ Erreur comptage joueurs: $e');
-      return 0;
-    }
-  }
 
   /// Fonction pour compter le nombre de joueurs actifs (avec points)
   static Future<int?> getActivePlayersCount() async {
@@ -449,7 +419,9 @@ class RankingService {
       
       // Statistiques du jour
       final dailyDocRef = _dailyStatsCollection.doc('${today.year}-${today.month}-${today.day}');
+      final monthlyDocRef = _monthlyStatsCollection.doc('${today.year}-${today.month}-${today.day}');
       final dailyDoc = await dailyDocRef.get();
+      final monthlyDoc = await monthlyDocRef.get();
       
       if (dailyDoc.exists) {
         await dailyDocRef.update({
@@ -469,8 +441,23 @@ class RankingService {
         });
       }
 
-      // Statistiques de la semaine (méthode similaire pour weeklyStatsCollection)
-      // Statistiques du mois (méthode similaire pour monthlyStatsCollection)
+      if (monthlyDoc.exists) {
+        await monthlyDocRef.update({
+          'totalPoints': FieldValue.increment(pointsScored),
+          'totalGames': FieldValue.increment(1),
+          'totalWins': FieldValue.increment(isWinner ? 1 : 0),
+          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+        });
+      } else {
+        await monthlyDocRef.set({
+          'date': today.millisecondsSinceEpoch,
+          'totalPoints': pointsScored,
+          'totalGames': 1,
+          'totalWins': isWinner ? 1 : 0,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
 
     } catch (e) {
       print('Erreur mise à jour stats globales: $e');
@@ -496,24 +483,6 @@ class RankingService {
       }
     } catch (e) {
       print('Erreur réinitialisation stats quotidiennes: $e');
-    }
-  }
-
-  // Réinitialiser les points hebdomadaires (à appeler une fois par semaine)
-  static Future<void> resetWeeklyStats() async {
-    try {
-      final playersSnapshot = await _playersCollection.get();
-      
-      for (final doc in playersSnapshot.docs) {
-        final playerData = doc.data() as Map<String, dynamic>;
-        final stats = playerData['stats'] as Map<String, dynamic>;
-        
-        await doc.reference.update({
-          'stats.weeklyPoints': 0,
-        });
-      }
-    } catch (e) {
-      print('Erreur réinitialisation stats hebdomadaires: $e');
     }
   }
 
@@ -592,9 +561,9 @@ class RankingService {
         case 'daily':
           ranking = await getDailyRanking(limit: topCount).first;
           break;
-        case 'weekly':
-          ranking = await getWeeklyRanking(limit: topCount).first;
-          break;
+        // case 'weekly':
+        //   ranking = await getWeeklyRanking(limit: topCount).first;
+        //  break;
         case 'monthly':
           ranking = await getMonthlyRanking(limit: topCount).first;
           break;

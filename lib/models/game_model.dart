@@ -144,7 +144,6 @@ class Game {
         orElse: () => GameStatus.waiting,
       );
     } catch (e) {
-      print('⚠️ Impossible de parser GameStatus: $value, erreur: $e');
       return GameStatus.waiting;
     }
   }

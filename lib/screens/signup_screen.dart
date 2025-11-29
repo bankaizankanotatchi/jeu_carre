@@ -77,10 +77,8 @@ class _SignupScreenState extends State<SignupScreen> {
       
       // Uploader l'image vers MinIO
       final String imageUrl = await _minioStorage.uploadUserAvatar(image, userId);
-      print('✅ Avatar uploadé avec succès vers MinIO: $imageUrl');
       return imageUrl;
     } catch (e) {
-      print('❌ Erreur upload avatar MinIO: $e');
       // Si MinIO échoue, on peut utiliser une image par défaut ou null
       return null;
     }
@@ -219,7 +217,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
       return querySnapshot.docs.isEmpty;
     } catch (e) {
-      print('Erreur vérification nom: $e');
       return false;
     }
   }
@@ -274,7 +271,6 @@ class _SignupScreenState extends State<SignupScreen> {
         String? avatarUrl;
         if (_selectedImage != null) {
           avatarUrl = await _uploadImageToMinio(_selectedImage!, user.uid);
-          print('✅ Avatar uploadé vers MinIO: $avatarUrl');
         } else {
           print('ℹ️ Aucune image sélectionnée, utilisation avatar par défaut');
         }

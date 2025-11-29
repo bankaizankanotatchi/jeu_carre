@@ -27,11 +27,9 @@ class GameStartService {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    print('🎯 Début écoute des parties actives pour: ${currentUser.uid}');
 
     _activeGamesSubscription?.cancel();
     _activeGamesSubscription = GameService.getMyActiveGames(currentUser.uid).listen((games) {
-      print('📊 Parties actives reçues: ${games.length}');
 
       // Filtrer les parties en cours où l'utilisateur est présent
       final activeGames = games.where((game) => 
@@ -40,12 +38,10 @@ class GameStartService {
         game.startedAt != null // La partie a vraiment commencé
       ).toList();
 
-      print('🎮 Parties en cours filtrées: ${activeGames.length}');
 
       if (activeGames.isNotEmpty && !_isAlreadyInGame) {
         // Prendre la partie la plus récente
         final latestGame = activeGames.first;
-        print('🚀 Navigation vers partie: ${latestGame.id}');
         _navigateToGame(latestGame);
       }
     }, onError: (error) {
@@ -62,12 +58,10 @@ class GameStartService {
     // Vérifier si nous sommes déjà sur un écran de jeu
     final currentRoute = ModalRoute.of(_context!)?.settings.name;
     if (currentRoute?.contains('GameScreen') == true) {
-      print('⚠️ Déjà sur écran de jeu, navigation annulée');
       return;
     }
 
     try {
-      print('🎯 Début navigation vers GameScreen...');
       
       // Marquer que nous sommes en jeu
       _isAlreadyInGame = true;
@@ -88,10 +82,8 @@ class GameStartService {
           (route) => route.isFirst, // Garder seulement la première route
         );
         
-        print('✅ Navigation réussie vers la partie ${game.id}');
       });
     } catch (e) {
-      print('❌ Erreur navigation: $e');
       _isAlreadyInGame = false;
     }
   }

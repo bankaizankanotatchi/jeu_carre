@@ -19,10 +19,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   Player? _opponentPlayer;
   bool _isLoading = true;
 
-  // MODIFICATION: Variables optimisées
-  int _totalPlayers = 0;
-  bool _isLoadingRank = true;
-
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
@@ -30,34 +26,8 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
     super.initState();
     _tabController = TabController(length: 1, vsync: this);
     _loadOpponentData();
-    _loadTotalPlayersCount(); // MODIFICATION: Charger seulement le total
   }
 
-  // NOUVELLE MÉTHODE OPTIMISÉE: Charger seulement le total des joueurs
-  Future<void> _loadTotalPlayersCount() async {
-    try {
-      setState(() {
-        _isLoadingRank = true;
-      });
-
-      // Utiliser la nouvelle fonction du RankingService
-      final totalPlayers = await RankingService.getTotalPlayersCount();
-      
-      if (mounted) {
-        setState(() {
-          _totalPlayers = totalPlayers!;
-          _isLoadingRank = false;
-        });
-      }
-    } catch (e) {
-      print('Erreur chargement nombre total joueurs: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingRank = false;
-        });
-      }
-    }
-  }
 
   Future<void> _loadOpponentData() async {
     try {
@@ -78,7 +48,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
         _isLoading = false;
       });
     } catch (e) {
-      print('Erreur chargement profil adversaire: $e');
       setState(() {
         _isLoading = false;
       });
@@ -237,40 +206,12 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
 
   // MÉTHODE OPTIMISÉE: Utiliser globalRank du joueur
   Widget _buildRankSection() {
-    if (_isLoadingRank) {
-      return Row(
-        children: [
-          Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 16),
-          SizedBox(width: 6),
-          Text(
-            'Chargement du rang...',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 12,
-            ),
-          ),
-        ],
-      );
-    }
 
     // UTILISER LA PROPRIÉTÉ globalRank DU JOUEUR
     final rank = _globalRank;
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color(0xFF1a0033).withOpacity(0.8),
-            Color(0xFF2d0052).withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: rank <= 3 && rank > 0 ? Color(0xFFFFD700) : Color(0xFF00d4ff),
-          width: 1.5,
-        ),
-      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -321,42 +262,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
               ),
             ],
           ),
-          
-          SizedBox(width: 8),
-          
-          // Séparateur
-          Container(
-            width: 1,
-            height: 20,
-            color: Colors.white.withOpacity(0.3),
-          ),
-          
-          SizedBox(width: 8),
-          
-          // Total des joueurs (calculé dynamiquement)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SUR',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              Text(
-                '$_totalPlayers',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
       ),
     );
   }

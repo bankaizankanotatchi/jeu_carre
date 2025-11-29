@@ -39,7 +39,6 @@ class FeedbackNotificationService {
   Future<void> _startListening() async {
     if (_currentUserId == null) return;
 
-    print('🎯 Démarrage écoute feedback - User: $_currentUserId');
 
     // 1. Écouter les NOUVEAUX messages publics en temps réel
     _newMessagesSubscription?.cancel();
@@ -88,7 +87,6 @@ class FeedbackNotificationService {
       _lastShownMessageId = message.id;
       _lastNotificationTime = DateTime.now();
       
-      print('🟢 NOUVEAU MESSAGE: ${message.username}');
       _showNewMessageNotification(message);
     }
   }
@@ -117,7 +115,6 @@ class FeedbackNotificationService {
         _lastShownInteractionId = interactionId;
         _lastNotificationTime = DateTime.now();
 
-        print('🟢 NOUVELLE INTERACTION: ${interaction.type} sur message de ${message.username}');
         _showInteractionNotification(interaction, message);
       }
     } catch (e) {

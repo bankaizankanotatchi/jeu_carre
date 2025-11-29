@@ -1,4 +1,3 @@
-// Ajoutez cette classe dans votre fichier GameScreen.dart
 import 'package:flutter/material.dart';
 
 class RadarPointPainter extends CustomPainter {
@@ -6,49 +5,84 @@ class RadarPointPainter extends CustomPainter {
   final double y;
   final Color color;
   final double animationValue;
+  final Offset? previousPosition; // 🔥 Nouveau: position précédente pour interpolation
+  final double smoothFactor; // 🔥 Nouveau: facteur de lissage
 
   RadarPointPainter({
     required this.x,
     required this.y,
     required this.color,
     required this.animationValue,
+    this.previousPosition, // 🔥 Optionnel: pour interpolation
+    this.smoothFactor = 0.3, // 🔥 Facteur de lissage (0.1 = très lisse, 0.5 = peu lisse)
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(x, y);
+    // 🔥 CALCUL DE LA POSITION LISSÉE
+    Offset currentCenter = Offset(x, y);
+    Offset smoothedCenter = currentCenter;
     
-    // Effet radar principal
-    final radarPaint = Paint()
-      ..color = color.withOpacity(0.6 * (1 - animationValue))
-      ..style = PaintingStyle.fill;
+    if (previousPosition != null) {
+      // 🔥 Interpolation linéaire pour un mouvement fluide
+      smoothedCenter = Offset(
+        previousPosition!.dx + (x - previousPosition!.dx) * smoothFactor,
+        previousPosition!.dy + (y - previousPosition!.dy) * smoothFactor,
+      );
+    }
     
-    // Cercle d'onde radar
-    final radius = 30.0 * animationValue;
-    canvas.drawCircle(center, radius, radarPaint);
+    final center = smoothedCenter;
     
-    // Anneau externe
-    final ringPaint = Paint()
-      ..color = color.withOpacity(0.9 * (1 - animationValue))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    // 🔥 EFFET RADAR PERMANENT - Plusieurs couches pour plus de contraste
     
-    canvas.drawCircle(center, radius, ringPaint);
-    
-    // Point central plus visible
+    // 1. POINT CENTRAL TRÈS VISIBLE
     final centerPaint = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
     
-    canvas.drawCircle(center, 8, centerPaint);
+    canvas.drawCircle(center, 10, centerPaint);
     
-    // Anneau central
+    // 2. ANEAU CENTRAL BLANC ÉPAIS
     final centerRingPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+    
+    canvas.drawCircle(center, 10, centerRingPaint);
+    
+    // 3. PREMIÈRE ONDE RADAR (très visible)
+    final radarPaint1 = Paint()
+      ..color = color.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+    
+    final radius1 = 15.0 + (25.0 * animationValue);
+    canvas.drawCircle(center, radius1, radarPaint1);
+    
+    // 4. DEUXIÈME ONDE RADAR (contraste)
+    final radarPaint2 = Paint()
+      ..color = Colors.white.withOpacity(0.6 * (1 - animationValue))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    
+    canvas.drawCircle(center, radius1, radarPaint2);
+    
+    // 5. TROISIÈME ONDE EXTERNE (très large)
+    final radarPaint3 = Paint()
+      ..color = color.withOpacity(0.4 * (1 - animationValue))
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     
-    canvas.drawCircle(center, 8, centerRingPaint);
+    final radius2 = radius1 + 15.0;
+    canvas.drawCircle(center, radius2, radarPaint3);
+    
+    // 6. EFFET DE LUMIÈRE PULSÉE
+    if (animationValue > 0.5) {
+      final pulsePaint = Paint()
+        ..color = Colors.white.withOpacity(0.3 * (1 - animationValue))
+        ..style = PaintingStyle.fill;
+      
+      canvas.drawCircle(center, 8, pulsePaint);
+    }
   }
 
   @override
@@ -56,6 +90,7 @@ class RadarPointPainter extends CustomPainter {
     return x != oldDelegate.x ||
         y != oldDelegate.y ||
         color != oldDelegate.color ||
-        animationValue != oldDelegate.animationValue;
+        animationValue != oldDelegate.animationValue ||
+        previousPosition != oldDelegate.previousPosition;
   }
 }

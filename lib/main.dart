@@ -2,6 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:jeu_carre/firebase_options.dart';
 import 'package:jeu_carre/screens/login_screen.dart';
 import 'package:jeu_carre/screens/navigation_screen.dart';
@@ -16,6 +17,12 @@ import 'package:jeu_carre/services/game_start_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+    // 🔒 FORCER L'ORIENTATION EN MODE PORTRAIT UNIQUEMENT
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
