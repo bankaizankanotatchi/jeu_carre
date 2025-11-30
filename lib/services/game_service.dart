@@ -248,6 +248,7 @@ static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int>
         'currentPlayer': nextPlayerId,
         'consecutiveMissedTurns.${point.playerId}': 0, // Réinitialiser les tours manqués
         'reflexionTimeRemaining.$nextPlayerId': game.reflexionTime,
+        'lastMoveAt': DateTime.now().millisecondsSinceEpoch, 
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       });
 
@@ -546,99 +547,99 @@ static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMiss
   // GESTION DES SPECTATEURS
   // ============================================================
 
-  /// Récupérer les spectateurs d'une partie en temps réel
-  static Stream<List<String>> getGameSpectators(String gameId) {
-    return gamesCollection.doc(gameId).snapshots().map((snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>;
-        return List<String>.from(data['spectators'] ?? []);
-      }
-      return [];
-    });
-  }
+//   /// Récupérer les spectateurs d'une partie en temps réel
+//   static Stream<List<String>> getGameSpectators(String gameId) {
+//     return gamesCollection.doc(gameId).snapshots().map((snapshot) {
+//       if (snapshot.exists) {
+//         final data = snapshot.data() as Map<String, dynamic>;
+//         return List<String>.from(data['spectators'] ?? []);
+//       }
+//       return [];
+//     });
+//   }
 
-  /// Récupérer les informations des spectateurs avec leurs profils
-  static Stream<List<Player>> getSpectatorsWithProfiles(String gameId) {
-    return getGameSpectators(gameId).asyncMap((spectatorIds) async {
-      final spectators = <Player>[];
-      for (final id in spectatorIds) {
-        final player = await getPlayer(id);
-        if (player != null) {
-          spectators.add(player);
-        }
-      }
-      return spectators;
-    });
-  }
+//   /// Récupérer les informations des spectateurs avec leurs profils
+//   static Stream<List<Player>> getSpectatorsWithProfiles(String gameId) {
+//     return getGameSpectators(gameId).asyncMap((spectatorIds) async {
+//       final spectators = <Player>[];
+//       for (final id in spectatorIds) {
+//         final player = await getPlayer(id);
+//         if (player != null) {
+//           spectators.add(player);
+//         }
+//       }
+//       return spectators;
+//     });
+//   }
 
-  /// Rejoindre une partie en tant que spectateur
-  static Future<void> joinAsSpectator(String gameId, String userId) async {
-    try {
-      final gameDoc = await gamesCollection.doc(gameId).get();
-      if (!gameDoc.exists) throw Exception('Partie non trouvée');
+//   /// Rejoindre une partie en tant que spectateur
+//   static Future<void> joinAsSpectator(String gameId, String userId) async {
+//     try {
+//       final gameDoc = await gamesCollection.doc(gameId).get();
+//       if (!gameDoc.exists) throw Exception('Partie non trouvée');
 
-      final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+//       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
       
-      if (!(game.gameSettings['allowSpectators'] ?? false)) {
-        throw Exception('Les spectateurs ne sont pas autorisés pour cette partie');
-      }
+//       if (!(game.gameSettings['allowSpectators'] ?? false)) {
+//         throw Exception('Les spectateurs ne sont pas autorisés pour cette partie');
+//       }
 
-      final maxSpectators = game.gameSettings['maxSpectators'] ?? 50;
-      if (game.spectators.length >= maxSpectators) {
-        throw Exception('Limite de spectateurs atteinte');
-      }
+//       final maxSpectators = game.gameSettings['maxSpectators'] ?? 50;
+//       if (game.spectators.length >= maxSpectators) {
+//         throw Exception('Limite de spectateurs atteinte');
+//       }
 
-      if (game.players.contains(userId)) {
-        throw Exception('Vous êtes déjà dans cette partie');
-      }
+//       if (game.players.contains(userId)) {
+//         throw Exception('Vous êtes déjà dans cette partie');
+//       }
 
-      if (game.spectators.contains(userId)) {
-        throw Exception('Vous observez déjà cette partie');
-      }
+//       if (game.spectators.contains(userId)) {
+//         throw Exception('Vous observez déjà cette partie');
+//       }
 
-      await gamesCollection.doc(gameId).update({
-        'spectators': FieldValue.arrayUnion([userId]),
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      });
+//       await gamesCollection.doc(gameId).update({
+//         'spectators': FieldValue.arrayUnion([userId]),
+//         'updatedAt': DateTime.now().millisecondsSinceEpoch,
+//       });
 
-      await spectatorsCollection.doc(gameId).set({
-        'gameId': gameId,
-        'spectators': FieldValue.arrayUnion([userId]),
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      }, SetOptions(merge: true));
-    } catch (e) {
-      throw Exception('Erreur rejoindre spectateur: $e');
-    }
-  }
+//       await spectatorsCollection.doc(gameId).set({
+//         'gameId': gameId,
+//         'spectators': FieldValue.arrayUnion([userId]),
+//         'updatedAt': DateTime.now().millisecondsSinceEpoch,
+//       }, SetOptions(merge: true));
+//     } catch (e) {
+//       throw Exception('Erreur rejoindre spectateur: $e');
+//     }
+//   }
 
-/// Quitter une partie en tant que spectateur
-static Future<void> leaveAsSpectator(String gameId, String userId) async {
-  try {
-    // Mettre à jour le document de jeu
-    await gamesCollection.doc(gameId).update({
-      'spectators': FieldValue.arrayRemove([userId]),
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    });
+// /// Quitter une partie en tant que spectateur
+// static Future<void> leaveAsSpectator(String gameId, String userId) async {
+//   try {
+//     // Mettre à jour le document de jeu
+//     await gamesCollection.doc(gameId).update({
+//       'spectators': FieldValue.arrayRemove([userId]),
+//       'updatedAt': DateTime.now().millisecondsSinceEpoch,
+//     });
 
-    // Mettre à jour la collection spectateurs avec gestion d'erreur
-    try {
-      final spectatorDoc = await spectatorsCollection.doc(gameId).get();
-      if (spectatorDoc.exists) {
-        await spectatorsCollection.doc(gameId).update({
-          'spectators': FieldValue.arrayRemove([userId]),
-          'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        });
-      } else {
-        print('ℹ️ Document spectateurs non trouvé, création non nécessaire');
-      }
-    } catch (e) {
-      print('⚠️ Erreur document spectateurs: $e');
-    }
-  } catch (e) {
-    print('❌ Erreur quitter spectateur: $e');
-    // Ne pas relancer l'exception pour éviter les crashs
-  }
-}
+//     // Mettre à jour la collection spectateurs avec gestion d'erreur
+//     try {
+//       final spectatorDoc = await spectatorsCollection.doc(gameId).get();
+//       if (spectatorDoc.exists) {
+//         await spectatorsCollection.doc(gameId).update({
+//           'spectators': FieldValue.arrayRemove([userId]),
+//           'updatedAt': DateTime.now().millisecondsSinceEpoch,
+//         });
+//       } else {
+//         print('ℹ️ Document spectateurs non trouvé, création non nécessaire');
+//       }
+//     } catch (e) {
+//       print('⚠️ Erreur document spectateurs: $e');
+//     }
+//   } catch (e) {
+//     print('❌ Erreur quitter spectateur: $e');
+//     // Ne pas relancer l'exception pour éviter les crashs
+//   }
+// }
   
   // ============================================================
   // RÉCUPÉRATION DES PARTIES - STREAMS OPTIMISÉS
@@ -689,27 +690,27 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
   }
 
   /// Récupérer toutes les parties publiques actives
-  static Stream<List<Game>> getAllActiveGames() {
-    return gamesCollection
-        .where('status', isEqualTo: GameStatus.playing.toString())
-        .where('gameSettings.allowSpectators', isEqualTo: true)
-        .orderBy('updatedAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .handleError((error) => print('Erreur stream parties publiques: $error'))
-        .map((snapshot) => snapshot.docs
-            .map((doc) {
-              try {
-                return Game.fromMap(doc.data() as Map<String, dynamic>);
-              } catch (e) {
-                print('Erreur parsing partie publique: $e');
-                return null;
-              }
-            })
-            .where((game) => game != null)
-            .cast<Game>()
-            .toList());
-  }
+  // static Stream<List<Game>> getAllActiveGames() {
+  //   return gamesCollection
+  //       .where('status', isEqualTo: GameStatus.playing.toString())
+  //       .where('gameSettings.allowSpectators', isEqualTo: true)
+  //       .orderBy('updatedAt', descending: true)
+  //       .limit(50)
+  //       .snapshots()
+  //       .handleError((error) => print('Erreur stream parties publiques: $error'))
+  //       .map((snapshot) => snapshot.docs
+  //           .map((doc) {
+  //             try {
+  //               return Game.fromMap(doc.data() as Map<String, dynamic>);
+  //             } catch (e) {
+  //               print('Erreur parsing partie publique: $e');
+  //               return null;
+  //             }
+  //           })
+  //           .where((game) => game != null)
+  //           .cast<Game>()
+  //           .toList());
+  // }
 
   /// Récupérer l'historique des parties
   static Stream<List<Game>> getGameHistory({int limit = 20}) {
@@ -740,6 +741,7 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
           MatchRequestStatus.accepted.toString(),
         ])
         .orderBy('createdAt', descending: true)
+        .limit(10) 
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
@@ -755,6 +757,7 @@ static Future<void> leaveAsSpectator(String gameId, String userId) async {
           MatchRequestStatus.accepted.toString(),
         ])
         .orderBy('createdAt', descending: true)
+        .limit(10) 
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => MatchRequest.fromMap(doc.data() as Map<String, dynamic>))
@@ -808,71 +811,79 @@ static Future<void> sendMatchRequest(MatchRequest request) async {
   }
 }
 
-  /// Accepter une demande de match avec userId
-  static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
-    try {
-      final requestDoc = await matchRequestsCollection.doc(requestId).get();
-      if (!requestDoc.exists) throw Exception('Demande non trouvée');
+/// Accepter une demande de match avec userId - AVEC LOADER
+static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
+  try {
+    print('🔄 Début acceptation demande $requestId par $currentUserId');
+    
+    final requestDoc = await matchRequestsCollection.doc(requestId).get();
+    if (!requestDoc.exists) throw Exception('Demande non trouvée');
 
-      final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
-      
-      if (request.toUserId != currentUserId) {
-        throw Exception('Vous ne pouvez pas accepter cette demande');
-      }
-      
-      if (GameService.isMatchRequestExpired(request)) {
-        throw Exception('Cette demande de match a expiré');
-      }
-
-      await matchRequestsCollection.doc(requestId).update({
-        'status': MatchRequestStatus.accepted.toString(),
-        'respondedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-
-      final gameId = generateId();
-      final game = Game(
-        id: gameId,
-        players: [request.fromUserId, request.toUserId],
-        currentPlayer: request.fromUserId,
-        scores: {request.fromUserId: 0, request.toUserId: 0},
-        gridSize: request.gridSize,
-        points: [],
-        squares: [],
-        status: GameStatus.playing,
-        player1Id: request.fromUserId,
-        player2Id: request.toUserId,
-        isAgainstAI: false,
-        gameDuration: request.gameDuration,
-        reflexionTime: request.reflexionTime,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        startedAt: DateTime.now(),
-        timeRemaining: request.gameDuration,
-        reflexionTimeRemaining: {
-          request.fromUserId: request.reflexionTime,
-          request.toUserId: request.reflexionTime,
-        },
-        consecutiveMissedTurns: {
-          request.fromUserId: 0,
-          request.toUserId: 0,
-        },
-        gameSettings: {
-          'allowSpectators': true,
-          'isRanked': true,
-          'maxSpectators': 50,
-        },
-      );
-
-      await createGame(game);
-      await _sendMatchAcceptedNotification(request, gameId);
-      await _sendGameStartedNotification(request, gameId);
-
-      return game;
-    } catch (e) {
-      throw Exception('Erreur acceptation demande: $e');
+    final request = MatchRequest.fromMap(requestDoc.data() as Map<String, dynamic>);
+    
+    if (request.toUserId != currentUserId) {
+      throw Exception('Vous ne pouvez pas accepter cette demande');
     }
-  }
+    
+    if (GameService.isMatchRequestExpired(request)) {
+      throw Exception('Cette demande de match a expiré');
+    }
 
+    // 🆕 MARQUER LA DEMANDE COMME ACCEPTÉE
+    await matchRequestsCollection.doc(requestId).update({
+      'status': MatchRequestStatus.accepted.toString(),
+      'respondedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    // 🆕 CRÉER LA PARTIE
+    final gameId = generateId();
+    final game = Game(
+      id: gameId,
+      players: [request.fromUserId, request.toUserId],
+      currentPlayer: request.fromUserId,
+      scores: {request.fromUserId: 0, request.toUserId: 0},
+      gridSize: request.gridSize,
+      points: [],
+      squares: [],
+      status: GameStatus.playing,
+      player1Id: request.fromUserId,
+      player2Id: request.toUserId,
+      isAgainstAI: false,
+      gameDuration: request.gameDuration,
+      reflexionTime: request.reflexionTime,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      startedAt: DateTime.now(),
+      timeRemaining: request.gameDuration,
+      reflexionTimeRemaining: {
+        request.fromUserId: request.reflexionTime,
+        request.toUserId: request.reflexionTime,
+      },
+      consecutiveMissedTurns: {
+        request.fromUserId: 0,
+        request.toUserId: 0,
+      },
+      gameSettings: {
+        'allowSpectators': true,
+        'isRanked': true,
+        'maxSpectators': 50,
+      },
+    );
+
+    print('🎮 Création de la partie $gameId...');
+    await createGame(game);
+    print('✅ Partie créée avec succès');
+
+    // 🆕 ENVOYER LES NOTIFICATIONS (en arrière-plan, ne pas bloquer)
+    _sendMatchAcceptedNotification(request, gameId);
+    _sendGameStartedNotification(request, gameId);
+
+    return game;
+  } catch (e) {
+    print('❌ Erreur acceptation demande: $e');
+    throw Exception('Erreur acceptation demande: $e');
+  }
+}
   /// Refuser une demande de match avec userId
   static Future<void> rejectMatchRequest(String requestId, String currentUserId, {String reason = 'Refusé par le joueur'}) async {
     try {
@@ -931,6 +942,7 @@ static Stream<List<dynamic>> getMatchRequests(String userId) {
         MatchRequestStatus.declined.toString(),
       ])
       .orderBy('createdAt', descending: true)
+      .limit(10)
       .snapshots()
       .handleError((error) => print('Erreur stream demandes de match: $error'))
       .map((snapshot) {
@@ -999,6 +1011,8 @@ static Stream<int> getPendingRequestsCount(String userId) {
   return matchRequestsCollection
       .where('toUserId', isEqualTo: userId)
       .where('status', isEqualTo: MatchRequestStatus.pending.toString())
+      .orderBy('createdAt', descending: true)
+      .limit(10) //
       .snapshots()
       .map((snapshot) => snapshot.docs.length)
       .handleError((error) {
@@ -1076,9 +1090,9 @@ static Future<void> saveGameResult(GameResult result) async {
       }
 
       final now = DateTime.now();
-      updates['stats.dailyPoints'] = player.stats.dailyPoints + result.pointsScored;
-      updates['stats.weeklyPoints'] = player.stats.weeklyPoints + result.pointsScored;
-      updates['stats.monthlyPoints'] = player.stats.monthlyPoints + result.pointsScored;
+      // updates['stats.dailyPoints'] = player.stats.dailyPoints + result.pointsScored;
+      // updates['stats.weeklyPoints'] = player.stats.weeklyPoints + result.pointsScored;
+      // updates['stats.monthlyPoints'] = player.stats.monthlyPoints + result.pointsScored;
 
       await usersCollection.doc(result.userId).update(updates);
       print('✅ Stats mises à jour pour ${result.userId}');
@@ -1388,27 +1402,148 @@ static Stream<Map<String, dynamic>> getQuickMessages(String gameId) {
       });
 }
 
-/// Nettoyer les messages expirés (optionnel - pour maintenance)
-static Future<void> cleanupExpiredMessages(String gameId) async {
+// Dans GameService
+static Future<void> checkAndPenalizeInactivePlayers(String gameId) async {
   try {
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) return;
+    
+    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    if (game.status == GameStatus.finished) return;
+    
+    final lastPoint = game.points.isNotEmpty ? game.points.last : null;
+    if (lastPoint == null) return;
+
+    // 🆕 CORRECTION : GESTION SÉCURISÉE DU TIMESTAMP
+    final lastMoveTimestamp = _getSafeTimestamp(lastPoint);
+    
     final now = DateTime.now().millisecondsSinceEpoch;
-    final messages = await gamesCollection
-        .doc(gameId)
-        .collection('quickMessages')
-        .where('expiresAt', isLessThan: now)
-        .get();
+    final timeSinceLastMove = (now - lastMoveTimestamp) ~/ 1000;
     
-    final batch = _firestore.batch();
-    for (final doc in messages.docs) {
-      batch.delete(doc.reference);
-    }
+    print('🔍 Vérification inactivité: $timeSinceLastMove secondes depuis dernier coup');
     
-    if (messages.docs.isNotEmpty) {
-      await batch.commit();
-      print('🧹 ${messages.docs.length} messages expirés nettoyés');
+    if (timeSinceLastMove >= 45) {
+      final currentPlayerId = game.currentPlayer;
+      print('⏰🚨 JOUEUR INACTIF DÉTECTÉ: $currentPlayerId ($timeSinceLastMove secondes)');
+      
+      await _finishGameByInactivity(gameId, currentPlayerId);
     }
   } catch (e) {
-    print('⚠️ Erreur nettoyage messages: $e');
+    print('❌ Erreur vérification inactivité: $e');
   }
 }
+
+// 🆕 MÉTHODE UTILITAIRE POUR OBTENIR UN TIMESTAMP SÉCURISÉ
+static int _getSafeTimestamp(GridPoint point) {
+
+  try {
+    // Vérifier le type du timestamp et le convertir en int
+    if (point.timestamp is bool) {
+      return point.timestamp;
+    } else if (point.timestamp is String) {
+      return int.tryParse(point.timestamp as String) ?? DateTime.now().millisecondsSinceEpoch;
+    } else if (point.timestamp is double) {
+      return (point.timestamp as double).round();
+    } else {
+      print('⚠️ Type de timestamp non géré: ${point.timestamp.runtimeType}');
+      return DateTime.now().millisecondsSinceEpoch;
+    }
+  } catch (e) {
+    print('⚠️ Erreur conversion timestamp: $e');
+    return DateTime.now().millisecondsSinceEpoch;
+  }
+}
+
+static Future<void> _finishGameByInactivity(String gameId, String inactivePlayerId) async {
+  try {
+    print('🎯 DÉBUT _finishGameByInactivity pour $inactivePlayerId');
+    
+    // 🎯 RÉCUPÉRER LA PARTIE ACTUALISÉE
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) {
+      print('❌ Partie non trouvée: $gameId');
+      return;
+    }
+
+    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    
+    // 🚫 VÉRIFIER QUE LA PARTIE N'EST PAS DÉJÀ TERMINÉE
+    if (game.status == GameStatus.finished) {
+      print('ℹ️ Partie déjà terminée: $gameId');
+      return;
+    }
+
+    print('🔍 État de la partie AVANT transfert:');
+    print('  - Player1 (${game.player1Id}): ${game.scores[game.player1Id]} points');
+    print('  - Player2 (${game.player2Id}): ${game.scores[game.player2Id]} points');
+    print('  - Joueur inactif: $inactivePlayerId');
+
+    // 🎯 IDENTIFIER LE GAGNANT (l'adversaire)
+    final winnerId = inactivePlayerId == game.player1Id ? game.player2Id : game.player1Id;
+    
+    if (winnerId == null) {
+      print('❌ Impossible de déterminer le gagnant');
+      return;
+    }
+
+    // 🎯 CALCULER LES NOUVEAUX SCORES (MÊME LOGIQUE QUE 3 TOURS MANQUÉS)
+    final loserScore = game.scores[inactivePlayerId] ?? 0;
+    final winnerScore = game.scores[winnerId] ?? 0;
+    final newWinnerScore = winnerScore + loserScore + 1; // +1 point bonus
+    
+    print('💰 CALCUL SCORES:');
+    print('  - Score gagnant initial: $winnerScore');
+    print('  - Score perdant: $loserScore');
+    print('  - Score gagnant final: $newWinnerScore (avec bonus +1)');
+
+    // 🎯 CRÉER LES SCORES FINAUX
+    final finalScores = {
+      winnerId: newWinnerScore,
+      inactivePlayerId: 0, // 🎯 PERDANT À 0 POINTS
+    };
+
+    print('🏆 SCORES FINAUX: $finalScores');
+
+    // 🎯 METTRE À JOUR LA PARTIE EN UNE SEULE OPÉRATION ATOMIQUE
+    final updateData = {
+      'scores': finalScores,
+      'status': GameStatus.finished.toString(),
+      'winnerId': winnerId,
+      'endReason': GameEndReason.timeout.toString(), // 🆕 RAISON "TIMEOUT"
+      'finishedAt': DateTime.now().millisecondsSinceEpoch,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+
+    print('📝 MISE À JOUR FIRESTORE: $updateData');
+
+    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
+    await gamesCollection.doc(gameId).update(updateData);
+    print('✅ Partie mise à jour dans Firestore');
+
+    // 🎯 ATTENDRE LA SYNCHRONISATION PUIS RÉCUPÉRER LA PARTIE MISE À JOUR
+    await Future.delayed(Duration(milliseconds: 500));
+    
+    final updatedGameDoc = await gamesCollection.doc(gameId).get();
+    final updatedGame = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
+    
+    print('🔍 État de la partie APRÈS transfert:');
+    print('  - Player1 (${updatedGame.player1Id}): ${updatedGame.scores[updatedGame.player1Id]} points');
+    print('  - Player2 (${updatedGame.player2Id}): ${updatedGame.scores[updatedGame.player2Id]} points');
+    print('  - Status: ${updatedGame.status}');
+    print('  - Gagnant: ${updatedGame.winnerId}');
+
+    // 🎯 SAUVEGARDER LES RÉSULTATS AVEC LA PARTIE MISE À JOUR
+    if (updatedGame.status == GameStatus.finished) {
+      await _saveGameResults(updatedGame);
+      print('✅ Résultats sauvegardés avec les scores transférés');
+    } else {
+      print('❌ ERREUR: La partie n\'est pas marquée comme terminée après update!');
+    }
+
+  } catch (e) {
+    print('❌ Erreur critique dans _finishGameByInactivity: $e');
+    print('❌ Stack trace: ${e.toString()}');
+  }
+}
+
 }

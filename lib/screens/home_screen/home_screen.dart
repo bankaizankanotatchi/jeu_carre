@@ -77,46 +77,46 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _loadRealTimeRankings() {
     try {
       // Classement du jour
-      _dailySubscription = RankingService.getDailyRanking(limit: 10).listen(
-        (players) {
-          try {
-            final formatted = RankingService.formatRankingData(players, 'daily');
-            if (mounted) {
-              setState(() {
-                _dailyRanking = formatted['players'];
-                _isLoading = false;
-              });
-            }
-          } catch (e) {
-            _handleError('Erreur de formatage des données');
-          }
-        },
-        onError: (error) {
-          _handleError('Erreur connexion classement jour');
-        },
-        cancelOnError: false,
-      );
+      // _dailySubscription = RankingService.getDailyRanking(limit: 10).listen(
+      //   (players) {
+      //     try {
+      //       final formatted = RankingService.formatRankingData(players, 'daily');
+      //       if (mounted) {
+      //         setState(() {
+      //           _dailyRanking = formatted['players'];
+      //           _isLoading = false;
+      //         });
+      //       }
+      //     } catch (e) {
+      //       _handleError('Erreur de formatage des données');
+      //     }
+      //   },
+      //   onError: (error) {
+      //     _handleError('Erreur connexion classement jour');
+      //   },
+      //   cancelOnError: false,
+      // );
 
-      // Classement du mois
-      _monthlySubscription = RankingService.getMonthlyRanking(limit: 10).listen(
-        (players) {
-          try {
-            final formatted = RankingService.formatRankingData(players, 'monthly');
-            if (mounted) {
-              setState(() {
-                _monthlyRanking = formatted['players'];
-                _isLoading = false;
-              });
-            }
-          } catch (e) {
-            _handleError('Erreur de formatage des données');
-          }
-        },
-        onError: (error) {
-          _handleError('Erreur connexion classement mois');
-        },
-        cancelOnError: false,
-      );
+      // // Classement du mois
+      // _monthlySubscription = RankingService.getMonthlyRanking(limit: 10).listen(
+      //   (players) {
+      //     try {
+      //       final formatted = RankingService.formatRankingData(players, 'monthly');
+      //       if (mounted) {
+      //         setState(() {
+      //           _monthlyRanking = formatted['players'];
+      //           _isLoading = false;
+      //         });
+      //       }
+      //     } catch (e) {
+      //       _handleError('Erreur de formatage des données');
+      //     }
+      //   },
+      //   onError: (error) {
+      //     _handleError('Erreur connexion classement mois');
+      //   },
+      //   cancelOnError: false,
+      // );
 
         // Classement global (tous les temps)
       _globalSubscription = RankingService.getGlobalRanking(limit: 10).listen(
@@ -651,10 +651,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   else
                     Column(
                       children: [
-                        _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
-                        SizedBox(height: 40),
-                        _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking,  Color(0xFFe040fb)),
-                        SizedBox(height: 40),
+                        // _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
+                        // SizedBox(height: 40),
+                        // _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking,  Color(0xFFe040fb)),
+                        // SizedBox(height: 40),
                         _buildRankingSection('Meilleurs joueurs de Shikaku', _globalRanking, Color(0xFFFFD700)),
                       ],
                     ),
@@ -724,10 +724,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildLoadingRankings() {
     return Column(
       children: [
-        _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
-        SizedBox(height: 40),
-        _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFe040fb)),
-        SizedBox(height: 40),
+        // _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
+        // SizedBox(height: 40),
+        // _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFe040fb)),
+        // SizedBox(height: 40),
         _buildRankingSectionShimmer('Meilleurs joueurs de Shikaku', Color(0xFFFFD700)),
       ],
     );

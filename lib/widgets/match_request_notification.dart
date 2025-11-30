@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/player.dart';
+import 'package:jeu_carre/screens/loading_screen.dart';
 
 class MatchRequestNotification extends StatefulWidget {
   final MatchRequest request;
@@ -66,15 +67,41 @@ class _MatchRequestNotificationState extends State<MatchRequestNotification>
     super.dispose();
   }
 
-  void _handleAccept() async {
-    try {
-      await _animationController.reverse();
-      widget.onAccept();
-    } catch (e) {
-      print('Erreur acceptation: $e');
-      widget.onAccept(); // Appeler quand même en cas d'erreur
+// Dans _MatchRequestNotificationState
+void _handleAccept() async {
+  try {
+    // 🆕 ANIMATION DE FERMETURE
+    await _animationController.reverse();
+    
+    // 🆕 NAVIGUER VERS L'ÉCRAN DE CHARGEMENT
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GameLoadingScreen(
+          opponentName: widget.fromPlayer.username,
+          gridSize: widget.request.gridSize,
+        ),
+      ),
+    );
+    
+    // 🆕 APPELER LA MÉTHODE D'ACCEPTATION
+    widget.onAccept();
+    
+  } catch (e) {
+    print('Erreur acceptation: $e');
+    
+    // 🆕 EN CAS D'ERREUR, RETOURNER ET AFFICHER UN MESSAGE
+    if (mounted) {
+      Navigator.pop(context); // Retirer l'écran de chargement si erreur
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'acceptation'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+}
 
   void _handleDecline() async {
     try {

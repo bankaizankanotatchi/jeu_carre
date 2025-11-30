@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/player.dart';
+import 'package:jeu_carre/screens/loading_screen.dart';
 import 'package:jeu_carre/services/game_service.dart';
 import 'package:jeu_carre/screens/game_screen/game_screen.dart';
 
@@ -20,7 +21,7 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<List<Game>>? _myActiveGamesStream;
-  Stream<List<Game>>? _allActiveGamesStream;
+  //Stream<List<Game>>? _allActiveGamesStream;
   
   // Nouveaux états pour les demandes
   bool _showReceivedRequests = true;
@@ -33,7 +34,7 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _initializeStreams();
   }
 
@@ -41,7 +42,7 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     final currentUserId = _auth.currentUser?.uid;
     
     // Initialiser les streams
-    _allActiveGamesStream = GameService.getAllActiveGames();
+   // _allActiveGamesStream = GameService.getAllActiveGames();
     
     if (currentUserId != null) {
       _myActiveGamesStream = GameService.getMyActiveGames(currentUserId);
@@ -119,41 +120,41 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   // MÉTHODES DE GESTION DES PARTIES
   // ============================================================
 
-  void _joinAsSpectator(Game game) async {
-    try {
-      final currentUserId = _auth.currentUser?.uid;
-      if (currentUserId != null) {
-        await GameService.joinAsSpectator(game.id, currentUserId);
+  // void _joinAsSpectator(Game game) async {
+  //   try {
+  //     final currentUserId = _auth.currentUser?.uid;
+  //     if (currentUserId != null) {
+  //       await GameService.joinAsSpectator(game.id, currentUserId);
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Vous observez maintenant la partie'),
-            backgroundColor: Colors.green,
-          ),
-        );
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text('Vous observez maintenant la partie'),
+  //           backgroundColor: Colors.green,
+  //         ),
+  //       );
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => GameScreen(
-              gridSize: game.gridSize,
-              isAgainstAI: game.isAgainstAI,
-              gameDuration: game.gameDuration,
-              reflexionTime: game.reflexionTime,
-              existingGame: game,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
+  //       Navigator.push(
+  //         context,
+  //         MaterialPageRoute(
+  //           builder: (context) => GameScreen(
+  //             gridSize: game.gridSize,
+  //             isAgainstAI: game.isAgainstAI,
+  //             gameDuration: game.gameDuration,
+  //             reflexionTime: game.reflexionTime,
+  //             existingGame: game,
+  //           ),
+  //         ),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: Text('Erreur: ${e.toString()}'),
+  //         backgroundColor: Colors.red,
+  //       ),
+  //     );
+  //   }
+  // }
 
   void _resumeGame(Game game) {
     Navigator.push(
@@ -174,29 +175,88 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
   // FONCTIONS POUR LES DEMANDES DE MATCH
   // ============================================================
 
-  void _acceptMatchRequest(dynamic request) async {
-    try {
-      final currentUserId = _auth.currentUser?.uid;
-      if (currentUserId == null) return;
+// Dans _MatchScreenState
+void _acceptMatchRequest(dynamic request) async {
+  try {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
 
-      await GameService.acceptMatchRequest(request.id, currentUserId);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Défi accepté !'),
-          backgroundColor: Colors.green,
+    // 🆕 AFFICHER LE LOADER IMMÉDIATEMENT
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GameLoadingScreen(
+          opponentName: _getOpponentName(request), // Méthode à implémenter
+          gridSize: request.gridSize,
+        ),
+      ),
+    );
+
+    print('🎯 Acceptation de la demande ${request.id}');
+    
+    // 🆕 ACCEPTER LA DEMANDE ET CRÉER LA PARTIE
+    final Game game = await GameService.acceptMatchRequest(
+      request.id, 
+      currentUserId
+    );
+    
+    // 🆕 ATTENDRE UN PEU POUR QUE LA PARTIE SOIT BIEN CRÉÉE DANS FIRESTORE
+    await Future.delayed(Duration(milliseconds: 1000));
+    
+    // 🆕 NAVIGUER VERS L'ÉCRAN DE JEU
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GameScreen(
+            gridSize: request.gridSize,
+            isAgainstAI: false,
+            gameDuration: request.gameDuration,
+            reflexionTime: request.reflexionTime,
+            existingGame: game,
+          ),
         ),
       );
-    } catch (e) {
+    }
+    
+  } catch (e) {
+    print('❌ Erreur lors de l\'acceptation: $e');
+    
+    // 🆕 EN CAS D'ERREUR, RETOURNER À L'ÉCRAN PRÉCÉDENT
+    if (mounted) {
+      Navigator.pop(context); // Retirer l'écran de chargement
+      
+      // Afficher un message d'erreur
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Erreur: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
     }
   }
+}
 
+// 🆕 AJOUTER CETTE MÉTHODE POUR OBTENIR LE NOM DE L'ADVERSAIRE
+String _getOpponentName(dynamic request) {
+  final currentUserId = _auth.currentUser?.uid;
+  if (currentUserId == null) return 'Adversaire';
+  
+  // Si c'est une demande reçue, l'adversaire est celui qui a envoyé
+  // Si c'est une demande envoyée, l'adversaire est celui qui a reçu
+  final opponentId = request.fromUserId == currentUserId 
+      ? request.toUserId 
+      : request.fromUserId;
+  
+  // Utiliser le cache si disponible
+  final cacheKey = 'opponent_$opponentId';
+  if (_opponentNameCache.containsKey(cacheKey)) {
+    return _opponentNameCache[cacheKey]!;
+  }
+  
+  return 'Adversaire'; // Fallback
+}
   void _rejectMatchRequest(dynamic request) async {
     try {
       final currentUserId = _auth.currentUser?.uid;
@@ -912,299 +972,299 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildPublicMatchCard(Game game) {
-    final timeLeft = game.timeRemaining;
-    final minutes = timeLeft ~/ 60;
-    final seconds = timeLeft % 60;
+  // Widget _buildPublicMatchCard(Game game) {
+  //   final timeLeft = game.timeRemaining;
+  //   final minutes = timeLeft ~/ 60;
+  //   final seconds = timeLeft % 60;
 
-    return FutureBuilder<List<Player?>>(
-      future: Future.wait([
-        if (game.player1Id != null && game.player1Id!.isNotEmpty)
-          _getPlayerWithCache(game.player1Id!)
-        else Future.value(null),
-        if (game.player2Id != null && game.player2Id!.isNotEmpty)
-          _getPlayerWithCache(game.player2Id!)
-        else Future.value(null),
-      ]),
-      builder: (context, snapshot) {
-        final player1 = snapshot.data?[0];
-        final player2 = snapshot.data?[1];
-        final score1 = game.scores[game.player1Id] ?? 0;
-        final score2 = game.scores[game.player2Id] ?? 0;
+  //   return FutureBuilder<List<Player?>>(
+  //     future: Future.wait([
+  //       if (game.player1Id != null && game.player1Id!.isNotEmpty)
+  //         _getPlayerWithCache(game.player1Id!)
+  //       else Future.value(null),
+  //       if (game.player2Id != null && game.player2Id!.isNotEmpty)
+  //         _getPlayerWithCache(game.player2Id!)
+  //       else Future.value(null),
+  //     ]),
+  //     builder: (context, snapshot) {
+  //       final player1 = snapshot.data?[0];
+  //       final player2 = snapshot.data?[1];
+  //       final score1 = game.scores[game.player1Id] ?? 0;
+  //       final score2 = game.scores[game.player2Id] ?? 0;
 
-        return Container(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Color(0xFF1a0033),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Color(0xFF4a0080)),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _joinAsSpectator(game),
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildPlayerInfo(
-                          player1, 
-                          [Color(0xFF00d4ff), Color(0xFF0099cc)]
-                        ),
+  //       return Container(
+  //         margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //         decoration: BoxDecoration(
+  //           color: Color(0xFF1a0033),
+  //           borderRadius: BorderRadius.circular(12),
+  //           border: Border.all(color: Color(0xFF4a0080)),
+  //         ),
+  //         child: Material(
+  //           color: Colors.transparent,
+  //           child: InkWell(
+  //             borderRadius: BorderRadius.circular(12),
+  //             onTap: () => _joinAsSpectator(game),
+  //             child: Padding(
+  //               padding: EdgeInsets.all(16),
+  //               child: Column(
+  //                 children: [
+  //                   Row(
+  //                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                     children: [
+  //                       _buildPlayerInfo(
+  //                         player1, 
+  //                         [Color(0xFF00d4ff), Color(0xFF0099cc)]
+  //                       ),
                         
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF4a0080),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'VS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
+  //                       Container(
+  //                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  //                         decoration: BoxDecoration(
+  //                           color: Color(0xFF4a0080),
+  //                           borderRadius: BorderRadius.circular(8),
+  //                         ),
+  //                         child: Text(
+  //                           'VS',
+  //                           style: TextStyle(
+  //                             color: Colors.white,
+  //                             fontSize: 10,
+  //                             fontWeight: FontWeight.w900,
+  //                           ),
+  //                         ),
+  //                       ),
                         
-                        _buildPlayerInfo(
-                          player2, 
-                          [Color(0xFFe040fb), Color(0xFF9c27b0)],
-                          isRight: true
-                        ),
-                      ],
-                    ),
+  //                       _buildPlayerInfo(
+  //                         player2, 
+  //                         [Color(0xFFe040fb), Color(0xFF9c27b0)],
+  //                         isRight: true
+  //                       ),
+  //                     ],
+  //                   ),
                     
-                    SizedBox(height: 16),
+  //                   SizedBox(height: 16),
                     
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF2d0052),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildScoreSection(score1, 'SCORE'),
+  //                   Container(
+  //                     padding: EdgeInsets.all(12),
+  //                     decoration: BoxDecoration(
+  //                       color: Color(0xFF2d0052),
+  //                       borderRadius: BorderRadius.circular(8),
+  //                     ),
+  //                     child: Row(
+  //                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                       children: [
+  //                         _buildScoreSection(score1, 'SCORE'),
                           
-                          Column(
-                            children: [
-                              Text(
-                                '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                                style: TextStyle(
-                                  color: Color(0xFFe040fb),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF00d4ff).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Color(0xFF00d4ff)),
-                                ),
-                                child: Text(
-                                  'TOUR DE ${_getCurrentPlayerName(game, player1, player2)}',
-                                  style: TextStyle(
-                                    color: Color(0xFF00d4ff),
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+  //                         Column(
+  //                           children: [
+  //                             Text(
+  //                               '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+  //                               style: TextStyle(
+  //                                 color: Color(0xFFe040fb),
+  //                                 fontSize: 18,
+  //                                 fontWeight: FontWeight.w900,
+  //                               ),
+  //                             ),
+  //                             SizedBox(height: 4),
+  //                             Container(
+  //                               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+  //                               decoration: BoxDecoration(
+  //                                 color: Color(0xFF00d4ff).withOpacity(0.2),
+  //                                 borderRadius: BorderRadius.circular(6),
+  //                                 border: Border.all(color: Color(0xFF00d4ff)),
+  //                               ),
+  //                               child: Text(
+  //                                 'TOUR DE ${_getCurrentPlayerName(game, player1, player2)}',
+  //                                 style: TextStyle(
+  //                                   color: Color(0xFF00d4ff),
+  //                                   fontSize: 8,
+  //                                   fontWeight: FontWeight.w900,
+  //                                 ),
+  //                               ),
+  //                             ),
+  //                           ],
+  //                         ),
                           
-                          _buildScoreSection(score2, 'SCORE'),
-                        ],
-                      ),
-                    ),
+  //                         _buildScoreSection(score2, 'SCORE'),
+  //                       ],
+  //                     ),
+  //                   ),
                     
-                    SizedBox(height: 12),
+  //                   SizedBox(height: 12),
                     
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.grid_on, color: Color(0xFF00d4ff), size: 12),
-                            SizedBox(width: 4),
-                            Text(
-                              'Grille ${game.gridSize}×${game.gridSize}',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
+  //                   Row(
+  //                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                     children: [
+  //                       Row(
+  //                         children: [
+  //                           Icon(Icons.grid_on, color: Color(0xFF00d4ff), size: 12),
+  //                           SizedBox(width: 4),
+  //                           Text(
+  //                             'Grille ${game.gridSize}×${game.gridSize}',
+  //                             style: TextStyle(
+  //                               color: Colors.white.withOpacity(0.7),
+  //                               fontSize: 10,
+  //                             ),
+  //                           ),
+  //                         ],
+  //                       ),
                         
-                        Row(
-                          children: [
-                            Icon(Icons.visibility, color: Color(0xFFe040fb), size: 12),
-                            SizedBox(width: 4),
-                            Text(
-                              '${game.spectators.length} spectateurs',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
+  //                       Row(
+  //                         children: [
+  //                           Icon(Icons.visibility, color: Color(0xFFe040fb), size: 12),
+  //                           SizedBox(width: 4),
+  //                           Text(
+  //                             '${game.spectators.length} spectateurs',
+  //                             style: TextStyle(
+  //                               color: Colors.white.withOpacity(0.7),
+  //                               fontSize: 10,
+  //                             ),
+  //                           ),
+  //                         ],
+  //                       ),
                         
-                        Container(
-                          width: 80,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => _joinAsSpectator(game),
-                              child: Center(
-                                child: Text(
-                                  'OBSERVER',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  //                       Container(
+  //                         width: 80,
+  //                         height: 30,
+  //                         decoration: BoxDecoration(
+  //                           gradient: LinearGradient(
+  //                             colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
+  //                           ),
+  //                           borderRadius: BorderRadius.circular(8),
+  //                         ),
+  //                         child: Material(
+  //                           color: Colors.transparent,
+  //                           child: InkWell(
+  //                             borderRadius: BorderRadius.circular(8),
+  //                             onTap: () => _joinAsSpectator(game),
+  //                             child: Center(
+  //                               child: Text(
+  //                                 'OBSERVER',
+  //                                 style: TextStyle(
+  //                                   color: Colors.white,
+  //                                   fontSize: 10,
+  //                                   fontWeight: FontWeight.w900,
+  //                                 ),
+  //                               ),
+  //                             ),
+  //                           ),
+  //                         ),
+  //                       ),
+  //                     ],
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ),
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
-  Widget _buildPlayerInfo(Player? player, List<Color> colors, {bool isRight = false}) {
-    return Expanded(
-      child: Row(
-        mainAxisAlignment: isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isRight) ...[
-            Container(
-              width: 35,
-              height: 35,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                ),
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: ClipOval(
-                child: Image.network(
-                  player?.displayAvatar ?? '👤',
-                  fit: BoxFit.cover,
-                  width: 35,
-                  height: 35,
-                  errorBuilder: (context, error, stackTrace) => 
-                    Icon(Icons.person, size: 20, color: Colors.white),
-                )
-              ),
-            ),
-            SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _truncateName(player?.username ?? 'Joueur'),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          if (isRight) ...[
-            SizedBox(width: 8),
-            Container(
-              width: 35,
-              height: 35,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
-                ),
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: ClipOval(
-                child: Image.network(
-                  player?.displayAvatar ?? '👤',
-                  fit: BoxFit.cover,
-                  width: 35,
-                  height: 35,
-                  errorBuilder: (context, error, stackTrace) => 
-                    Icon(Icons.person, size: 20, color: Colors.white),
-                )
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  // Widget _buildPlayerInfo(Player? player, List<Color> colors, {bool isRight = false}) {
+  //   return Expanded(
+  //     child: Row(
+  //       mainAxisAlignment: isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+  //       children: [
+  //         if (!isRight) ...[
+  //           Container(
+  //             width: 35,
+  //             height: 35,
+  //             decoration: BoxDecoration(
+  //               shape: BoxShape.circle,
+  //               gradient: LinearGradient(
+  //                 colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+  //               ),
+  //               border: Border.all(color: Colors.white, width: 2),
+  //             ),
+  //             child: ClipOval(
+  //               child: Image.network(
+  //                 player?.displayAvatar ?? '👤',
+  //                 fit: BoxFit.cover,
+  //                 width: 35,
+  //                 height: 35,
+  //                 errorBuilder: (context, error, stackTrace) => 
+  //                   Icon(Icons.person, size: 20, color: Colors.white),
+  //               )
+  //             ),
+  //           ),
+  //           SizedBox(width: 8),
+  //         ],
+  //         Expanded(
+  //           child: Column(
+  //             crossAxisAlignment: isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+  //             children: [
+  //               Text(
+  //                 _truncateName(player?.username ?? 'Joueur'),
+  //                 style: TextStyle(
+  //                   color: Colors.white,
+  //                   fontSize: 14,
+  //                   fontWeight: FontWeight.w700,
+  //                 ),
+  //                 overflow: TextOverflow.ellipsis,
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //         if (isRight) ...[
+  //           SizedBox(width: 8),
+  //           Container(
+  //             width: 35,
+  //             height: 35,
+  //             decoration: BoxDecoration(
+  //               shape: BoxShape.circle,
+  //               gradient: LinearGradient(
+  //                 colors: [Color(0xFF00d4ff), Color(0xFF0099cc)],
+  //               ),
+  //               border: Border.all(color: Colors.white, width: 2),
+  //             ),
+  //             child: ClipOval(
+  //               child: Image.network(
+  //                 player?.displayAvatar ?? '👤',
+  //                 fit: BoxFit.cover,
+  //                 width: 35,
+  //                 height: 35,
+  //                 errorBuilder: (context, error, stackTrace) => 
+  //                   Icon(Icons.person, size: 20, color: Colors.white),
+  //               )
+  //             ),
+  //           ),
+  //         ],
+  //       ],
+  //     ),
+  //   );
+  // }
 
-  Widget _buildScoreSection(int score, String label) {
-    return Column(
-      children: [
-        Text(
-          '$score',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
+  // Widget _buildScoreSection(int score, String label) {
+  //   return Column(
+  //     children: [
+  //       Text(
+  //         '$score',
+  //         style: TextStyle(
+  //           color: Colors.white,
+  //           fontSize: 24,
+  //           fontWeight: FontWeight.w900,
+  //         ),
+  //       ),
+  //       Text(
+  //         label,
+  //         style: TextStyle(
+  //           color: Colors.white.withOpacity(0.6),
+  //           fontSize: 8,
+  //           fontWeight: FontWeight.w700,
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
-  String _getCurrentPlayerName(Game game, Player? player1, Player? player2) {
-    if (game.currentPlayer == game.player1Id) {
-      return player1?.username ?? 'J1';
-    } else if (game.currentPlayer == game.player2Id) {
-      return player2?.username ?? 'J2';
-    }
-    return '?';
-  }
+  // String _getCurrentPlayerName(Game game, Player? player1, Player? player2) {
+  //   if (game.currentPlayer == game.player1Id) {
+  //     return player1?.username ?? 'J1';
+  //   } else if (game.currentPlayer == game.player2Id) {
+  //     return player2?.username ?? 'J2';
+  //   }
+  //   return '?';
+  // }
 
   Widget _buildLoadingState(String message) {
     return Center(
@@ -1367,7 +1427,7 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
               ),
               indicatorWeight: 3,
               tabs: [
-                Tab(icon: Icon(Icons.public), text: 'TOUS LES MATCHS'),
+                //Tab(icon: Icon(Icons.public), text: 'TOUS LES MATCHS'),
                 Tab(icon: Icon(Icons.person), text: 'MES MATCHS'),
                 Tab(icon: Icon(Icons.notifications), text: 'DEMANDES'),
               ],
@@ -1379,36 +1439,36 @@ class _MatchScreenState extends State<MatchScreen> with SingleTickerProviderStat
               controller: _tabController,
               children: [
                 // TAB 1: TOUS LES MATCHS
-                StreamBuilder<List<Game>>(
-                  stream: _allActiveGamesStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildLoadingState('Recherche de matchs publics...');
-                    }
+                // StreamBuilder<List<Game>>(
+                //   stream: _allActiveGamesStream,
+                //   builder: (context, snapshot) {
+                //     if (snapshot.connectionState == ConnectionState.waiting) {
+                //       return _buildLoadingState('Recherche de matchs publics...');
+                //     }
 
-                    if (snapshot.hasError) {
-                      return _buildErrorState('Erreur de chargement des matchs');
-                    }
+                //     if (snapshot.hasError) {
+                //       return _buildErrorState('Erreur de chargement des matchs');
+                //     }
 
-                    final games = snapshot.data ?? [];
+                //     final games = snapshot.data ?? [];
 
-                    if (games.isEmpty) {
-                      return _buildEmptyState(
-                        'AUCUN MATCH PUBLIC',
-                        'Les matchs en cours apparaîtront ici\nLancez une partie en mode "Public"',
-                        Icons.people,
-                      );
-                    }
+                //     if (games.isEmpty) {
+                //       return _buildEmptyState(
+                //         'AUCUN MATCH PUBLIC',
+                //         'Les matchs en cours apparaîtront ici\nLancez une partie en mode "Public"',
+                //         Icons.people,
+                //       );
+                //     }
 
-                    return ListView.builder(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      itemCount: games.length,
-                      itemBuilder: (context, index) {
-                        return _buildPublicMatchCard(games[index]);
-                      },
-                    );
-                  },
-                ),
+                //     return ListView.builder(
+                //       padding: EdgeInsets.symmetric(vertical: 16),
+                //       itemCount: games.length,
+                //       itemBuilder: (context, index) {
+                //         return _buildPublicMatchCard(games[index]);
+                //       },
+                //     );
+                //   },
+                // ),
               
                 // TAB 2: MES MATCHS
                 StreamBuilder<List<Game>>(

@@ -66,11 +66,11 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
   final PresenceService _presenceService = PresenceService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final MatchNotificationService _matchNotificationService = MatchNotificationService();
-  final FeedbackNotificationService _feedbackNotificationService = FeedbackNotificationService(); 
+  //final FeedbackNotificationService _feedbackNotificationService = FeedbackNotificationService(); 
   final GameStartService _gameStartService = GameStartService(); 
   
   // 🔥 NOUVELLE INSTANCE DU SERVICE DE NOTIFICATION DES MATCHS REFUSÉS
-  final MatchNotificationDeclinedService _matchDeclinedNotificationService = MatchNotificationDeclinedService();
+ // final MatchNotificationDeclinedService _matchDeclinedNotificationService = MatchNotificationDeclinedService();
 
   @override
   void initState() {
@@ -87,11 +87,11 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
     _updatePresenceStatus(false);
     
     // 🔥 NETTOYAGE DU NOUVEAU SERVICE
-    _matchDeclinedNotificationService.dispose();
+    //_matchDeclinedNotificationService.dispose();
     
     _matchNotificationService.dispose();
     _gameStartService.dispose();
-    _feedbackNotificationService.dispose(); 
+    //_feedbackNotificationService.dispose(); 
     super.dispose();
   }
 
@@ -102,10 +102,10 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _updatePresenceStatus(true);
         _matchNotificationService.restart();
         _gameStartService.restart();
-        _feedbackNotificationService.restart(); 
+       // _feedbackNotificationService.restart(); 
         
         // 🔥 REDÉMARRER LE NOUVEAU SERVICE
-        _matchDeclinedNotificationService.restart();
+       // _matchDeclinedNotificationService.restart();
         break;
         
       case AppLifecycleState.paused:
@@ -115,10 +115,10 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _updatePresenceStatus(false);
         _matchNotificationService.stop();
         _gameStartService.stop();
-        _feedbackNotificationService.stop();
+        //_feedbackNotificationService.stop();
         
         // 🔥 ARRÊTER LE NOUVEAU SERVICE
-        _matchDeclinedNotificationService.stop();
+        //_matchDeclinedNotificationService.stop();
         break;
     }
   }
@@ -157,10 +157,10 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
       if (mounted) {
         _matchNotificationService.initialize(context);
         _gameStartService.initialize(context);
-        _feedbackNotificationService.initialize(context); 
+        //_feedbackNotificationService.initialize(context); 
         
         // 🔥 INITIALISER LE NOUVEAU SERVICE
-        _matchDeclinedNotificationService.initialize(context);
+        //_matchDeclinedNotificationService.initialize(context);
       }
     });
     

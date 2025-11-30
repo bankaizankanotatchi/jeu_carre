@@ -41,46 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDJ1mjfaJy8kmLUi3VMSRtPPJkIch8B_lM',
-    appId: '1:759937260165:web:473e679a2e66425c53a7ec',
-    messagingSenderId: '759937260165',
-    projectId: 'dots-and-boxes-53a01',
-    authDomain: 'dots-and-boxes-53a01.firebaseapp.com',
-    storageBucket: 'dots-and-boxes-53a01.firebasestorage.app',
+    apiKey: 'AIzaSyA88UVSoLuhmUuYrlP_NlKPYwC6ENnxGUA',
+    appId: '1:691944741018:web:6638ad0b3bf38da188a723',
+    messagingSenderId: '691944741018',
+    projectId: 'shikaku-aec0c',
+    authDomain: 'shikaku-aec0c.firebaseapp.com',
+    storageBucket: 'shikaku-aec0c.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDy1NaHYkIwp-ovFRG54w0snezVHFSmM7c',
-    appId: '1:759937260165:android:48dfc80cab4563ee53a7ec',
-    messagingSenderId: '759937260165',
-    projectId: 'dots-and-boxes-53a01',
-    storageBucket: 'dots-and-boxes-53a01.firebasestorage.app',
+    apiKey: 'AIzaSyBsYlYyqLO-bTErU9SbmDbHox3QX3DSjlQ',
+    appId: '1:691944741018:android:1871d3c3c4dbdab188a723',
+    messagingSenderId: '691944741018',
+    projectId: 'shikaku-aec0c',
+    storageBucket: 'shikaku-aec0c.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyB5D4omtOGuVDWet3ga1GHDTrhmW8PT98k',
-    appId: '1:759937260165:ios:5948a026902899f053a7ec',
-    messagingSenderId: '759937260165',
-    projectId: 'dots-and-boxes-53a01',
-    storageBucket: 'dots-and-boxes-53a01.firebasestorage.app',
+    apiKey: 'AIzaSyBR2IcsTOV752B6bQyikg_P4eN07rmGe78',
+    appId: '1:691944741018:ios:36393bacbbd87bac88a723',
+    messagingSenderId: '691944741018',
+    projectId: 'shikaku-aec0c',
+    storageBucket: 'shikaku-aec0c.firebasestorage.app',
     iosBundleId: 'com.example.jeuCarre',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyB5D4omtOGuVDWet3ga1GHDTrhmW8PT98k',
-    appId: '1:759937260165:ios:5948a026902899f053a7ec',
-    messagingSenderId: '759937260165',
-    projectId: 'dots-and-boxes-53a01',
-    storageBucket: 'dots-and-boxes-53a01.firebasestorage.app',
+    apiKey: 'AIzaSyBR2IcsTOV752B6bQyikg_P4eN07rmGe78',
+    appId: '1:691944741018:ios:36393bacbbd87bac88a723',
+    messagingSenderId: '691944741018',
+    projectId: 'shikaku-aec0c',
+    storageBucket: 'shikaku-aec0c.firebasestorage.app',
     iosBundleId: 'com.example.jeuCarre',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDJ1mjfaJy8kmLUi3VMSRtPPJkIch8B_lM',
-    appId: '1:759937260165:web:efea3de236d1e49c53a7ec',
-    messagingSenderId: '759937260165',
-    projectId: 'dots-and-boxes-53a01',
-    authDomain: 'dots-and-boxes-53a01.firebaseapp.com',
-    storageBucket: 'dots-and-boxes-53a01.firebasestorage.app',
+    apiKey: 'AIzaSyA88UVSoLuhmUuYrlP_NlKPYwC6ENnxGUA',
+    appId: '1:691944741018:web:3502e422947b5db588a723',
+    messagingSenderId: '691944741018',
+    projectId: 'shikaku-aec0c',
+    authDomain: 'shikaku-aec0c.firebaseapp.com',
+    storageBucket: 'shikaku-aec0c.firebasestorage.app',
   );
 }

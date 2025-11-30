@@ -23,6 +23,11 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
       'description': 'Former le plus de carrés possible en connectant les points sur la grille. Chaque carré complet rapporte 1 point.',
       'illustration': 'grid_points',
     },
+        {
+      'title': '🎮 MODES MULTIJOUEURS',
+      'description': '• En ligne : Défiez d\'autres joueurs connectés\n• Local : Jouez sur le même écran avec un ami\n• Après "Testez vos capacités", allez dans "Multijoueur"',
+      'illustration': 'multiplayer',
+    },
     {
       'title': '🔄 TOUR PAR TOUR',
       'description': 'Les joueurs bleu et rouge jouent alternativement. Chaque joueur place un point par tour.',
@@ -42,6 +47,11 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
       'title': '⏱️ TIMERS',
       'description': '15 secondes par coup • 3 minutes par partie totale • 3 tours manqués = défaite automatique • au debut de chaque partie vous pouvez changer ces paramètres sauf pour la pénalité',
       'illustration': 'timers',
+    },
+    {
+      'title': '🔌 RECONNEXION',
+      'description': 'Si un joueur se déconnecte pendant une partie, il dispose de 30 secondes pour se reconnecter et reprendre la partie. Passé ce délai, la partie est perdue pour le joueur déconnecté.',
+      'illustration': 'reconnection',
     },
     {
       'title': '🏆 VICTOIRE',
@@ -114,6 +124,10 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
         return _buildScoringIllustration();
       case 'timers':
         return _buildTimersIllustration();
+      case 'reconnection':
+        return _buildReconnectionIllustration();
+      case 'multiplayer':
+        return _buildMultiplayerIllustration();
       case 'victory':
         return _buildVictoryIllustration();
       default:
@@ -312,6 +326,132 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
           _buildTimerItem('⏱️ Tour', '15s', const Color(0xFF00d4ff)),
           _buildTimerItem('⏰ Partie', '3:00', const Color(0xFFe040fb)),
           _buildTimerItem('🚫 Pénalité', '3 tours', const Color(0xFFff006e)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReconnectionIllustration() {
+    return SizedBox(
+      width: 200,
+      height: 100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF4CAF50).withOpacity(0.8),
+                  const Color(0xFF2E7D32).withOpacity(0.3),
+                ],
+              ),
+              border: Border.all(color: const Color(0xFF4CAF50), width: 3),
+            ),
+            child: Icon(
+              Icons.wifi_find_rounded,
+              color: Colors.white,
+              size: 50,
+            ),
+          ),
+        
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMultiplayerIllustration() {
+    return SizedBox(
+      width: 200,
+      height: 200,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icône multijoueur en ligne
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Column(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF00d4ff).withOpacity(0.8),
+                          const Color(0xFF00d4ff).withOpacity(0.3),
+                        ],
+                      ),
+                      border: Border.all(color: const Color(0xFF00d4ff), width: 2),
+                    ),
+                    child: Icon(Icons.people_alt, color: Colors.white, size: 30),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'En ligne',
+                    style: TextStyle(
+                      color: const Color(0xFF00d4ff),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFFe040fb).withOpacity(0.8),
+                          const Color(0xFFe040fb).withOpacity(0.3),
+                        ],
+                      ),
+                      border: Border.all(color: const Color(0xFFe040fb), width: 2),
+                    ),
+                    child: Icon(Icons.phone_iphone, color: Colors.white, size: 30),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Local',
+                    style: TextStyle(
+                      color: const Color(0xFFe040fb),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          // Instructions
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2d0052),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF4a0080), width: 1),
+            ),
+            child: Text(
+              'Testez vos capacités → Multijoueur → Choisissez un mode',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
         ],
       ),
     );

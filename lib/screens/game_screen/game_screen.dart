@@ -226,6 +226,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     'bleu': 0,
     'rouge': 0
   };
+  late Timer _inactivityTimer;
+
+  // Dans la classe _GameScreenState
+  void _checkForPlayerInactivity() {
+    if (!_isOnlineGame || _gameId == null || isGameFinished) return;
+    
+    print('🔍 Vérification inactivité pour la partie $_gameId');
+    
+    GameService.checkAndPenalizeInactivePlayers(_gameId!)
+      .catchError((error) {
+        print('⚠️ Erreur vérification inactivité: $error');
+      });
+  }
 
   bool _isPlayerOnLeft(String playerId) {
     if (!_isOnlineGame) return playerId == 'bleu';
@@ -246,11 +259,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       final isPlayer = widget.existingGame!.players.contains(currentUser.uid);
       
       // Si ce n'est pas un joueur, c'est un spectateur
-      _isSpectator = !isPlayer;
+      // _isSpectator = !isPlayer;
       
-      if (_isSpectator) {
-        _joinAsSpectator();
-      }
+      // if (_isSpectator) {
+      //   _joinAsSpectator();
+      // }
     }
   }
 
@@ -356,6 +369,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeTimers();
       _centerZoom();
+
+        // 🆕 Démarrer le timer d'inactivité
+  _startInactivityTimer();
       
       if (widget.isAgainstAI) {
         aiPlayerId = 'rouge';
@@ -365,6 +381,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       }
     });
   }
+
+  // Nouvelle méthode pour le timer d'inactivité
+void _startInactivityTimer() {
+  _inactivityTimer = Timer.periodic(Duration(seconds: 15), (timer) {
+    if (!mounted || !_isOnlineGame || isGameFinished) {
+      timer.cancel();
+      return;
+    }
+    _checkForPlayerInactivity();
+  });
+}
     
   void _initializeGameData() async {
   final currentUser = FirebaseAuth.instance.currentUser;
@@ -410,11 +437,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         _opponentPlayer = await GameService.getPlayer(widget.existingGame!.player2Id!);
       }
       
-      _joinAsSpectator();
+      //_joinAsSpectator();
     }
     
     _startListeningToGameUpdates();
-    _loadSpectators();
+   // _loadSpectators();
   } else if (widget.opponentId != null) {
     _opponentPlayer = await GameService.getPlayer(widget.opponentId!);
   }
@@ -531,32 +558,32 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
 
-  void _loadSpectators() {
-    if (_gameId == null) return;
+  // void _loadSpectators() {
+  //   if (_gameId == null) return;
     
-    _spectatorsStream = GameService.getSpectatorsWithProfiles(_gameId!);
-    _spectatorsStream?.listen((spectators) {
-      if (mounted) {
-        setState(() {
-          _spectators = spectators;
-        });
-      }
-    });
-  }
+  //   _spectatorsStream = GameService.getSpectatorsWithProfiles(_gameId!);
+  //   _spectatorsStream?.listen((spectators) {
+  //     if (mounted) {
+  //       setState(() {
+  //         _spectators = spectators;
+  //       });
+  //     }
+  //   });
+  // }
 
-  void _joinAsSpectator() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && _gameId != null) {
-      GameService.joinAsSpectator(_gameId!, currentUser.uid);
-    }
-  }
+  // void _joinAsSpectator() {
+  //   final currentUser = FirebaseAuth.instance.currentUser;
+  //   if (currentUser != null && _gameId != null) {
+  //     GameService.joinAsSpectator(_gameId!, currentUser.uid);
+  //   }
+  // }
 
-  void _leaveAsSpectator() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null && _gameId != null) {
-      GameService.leaveAsSpectator(_gameId!, currentUser.uid);
-    }
-  }
+  // void _leaveAsSpectator() {
+  //   final currentUser = FirebaseAuth.instance.currentUser;
+  //   if (currentUser != null && _gameId != null) {
+  //     GameService.leaveAsSpectator(_gameId!, currentUser.uid);
+  //   }
+  // }
 
   @override
   void dispose() {
@@ -570,9 +597,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _messageOverlayEntry?.remove();
     
     // 🚪 QUITTER EN TANT QUE SPECTATEUR SEULEMENT SI ON ÉTAIT SPECTATEUR
-    if (_isSpectator && _gameId != null && _currentUserId != null) {
-      _leaveAsSpectator();
-    }
+    // if (_isSpectator && _gameId != null && _currentUserId != null) {
+    //   _leaveAsSpectator();
+    // }
     super.dispose();
   }
 
@@ -580,6 +607,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _gameTimer.cancel();
     _reflexionTimer.cancel();
     _timerInitialized = false;
+    _inactivityTimer.cancel(); 
   }
 
   void _startRadarAnimation(GridPoint point) {
@@ -1497,16 +1525,16 @@ Widget _buildDrawProfile(String playerName, Color color) {
                   icon: Icon(Icons.arrow_back, color: Colors.white, size: 20),
                   onPressed: () {
                     // 🎯 ACTION DIFFÉRENTE POUR LES SPECTATEURS
-                    if (_isSpectator) {
-                      _leaveAsSpectatorAndExit();
-                    } else {
+                    // if (_isSpectator) {
+                    //   _leaveAsSpectatorAndExit();
+                    // } else {
                       Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => const NavigationScreen(),
                               ),
                             );
-                    }
+                    //}
                   },
                 ),
               ),
@@ -1574,10 +1602,10 @@ Widget _buildDrawProfile(String playerName, Color color) {
     );
   }
 
-  void _leaveAsSpectatorAndExit() {
-    _leaveAsSpectator();
-    Navigator.pop(context);
-  }
+  // void _leaveAsSpectatorAndExit() {
+  //   _leaveAsSpectator();
+  //   Navigator.pop(context);
+  // }
 
   Widget _buildGameMenuDropdown() {
     return Container(
@@ -1596,9 +1624,10 @@ Widget _buildDrawProfile(String playerName, Color color) {
             _showForfeitConfirmation();
           } else if (value == 'new_game' && !_isOnlineGame) {
             _showNewGameConfirmation();
-          }else if (value == 'leave_spectator' && _isSpectator) {
-            _leaveAsSpectatorAndExit();
           }
+          // else if (value == 'leave_spectator' && _isSpectator) {
+          //   _leaveAsSpectatorAndExit();
+          // }
         },
         itemBuilder: (BuildContext context) => [
           // 🎯 OPTION POUR QUITTER EN TANT QUE SPECTATEUR
@@ -1928,116 +1957,7 @@ Widget _buildDrawProfile(String playerName, Color color) {
     ),
   );
 }
-  
-  Widget _buildSpectatorsSection() {
-    return StreamBuilder<List<Player>>(
-      stream: _spectatorsStream,
-      builder: (context, snapshot) {
-        final spectators = snapshot.data ?? _spectators;
-        
-        return Container(
-          height: 90,
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Color(0xFF1a0033),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: Color(0xFF4a0080), width: 2),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Color(0xFF2d0052),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(13),
-                    topRight: Radius.circular(13),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.visibility, color: Color(0xFFe040fb), size: 12),
-                    SizedBox(width: 8),
-                    Text(
-                      '${spectators.length} SPECTATEURS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: spectators.isEmpty 
-                    ? _buildEmptySpectators()
-                    : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        itemCount: spectators.length,
-                        itemBuilder: (context, index) {
-                          final spectator = spectators[index];
-                          return Container(
-                            margin: EdgeInsets.symmetric(horizontal: 4),
-                            child: Column(
-                              children: [
-                                  Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                                    ),
-                                    border: Border.all(color: Colors.white, width: 2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color(0xFF9c27b0).withOpacity(0.5),
-                                        blurRadius: 15,
-                                        spreadRadius: 3,
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipOval( // Force le clip circulaire
-                                    child:Image.network(
-                                            spectator.displayAvatar,
-                                            fit: BoxFit.cover,
-                                            width: 40,
-                                            height: 40,
-                                            errorBuilder: (context, error, stackTrace) => 
-                                              Icon(Icons.person, size: 20, color: Colors.white),
-                                          )
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
-  Widget _buildEmptySpectators() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.people_outline, color: Color(0xFF4a0080), size: 24),
-          SizedBox(height: 4),
-          Text('Aucun spectateur', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
-        ],
-      ),
-    );
-  }
-  
   Widget _buildGameGrid() {
     final cellSize = 60.0;
     final gridWidth = (widget.gridSize * cellSize) + 40;
@@ -2359,7 +2279,7 @@ Widget _buildMessageBubble(String message, {required bool isOnLeft, required boo
                   ),
                 ),
               ),
-              _buildSpectatorsSection(),
+              //_buildSpectatorsSection(),
             ],
           ),
         ),

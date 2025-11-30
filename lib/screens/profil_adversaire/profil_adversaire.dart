@@ -211,7 +211,6 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
     final rank = _globalRank;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -625,7 +624,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                                 ),
                               ),
                               
-                              SizedBox(height: 8),
+                              SizedBox(height: 4),
                               
                               // NOUVEAU: Section Rang optimisée
                               _buildRankSection(),

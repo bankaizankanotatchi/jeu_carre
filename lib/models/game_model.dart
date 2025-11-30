@@ -196,14 +196,18 @@ class GridPoint {
   final int x;
   final int y;
   final String? playerId;
+  final int timestamp;
 
-  GridPoint({required this.x, required this.y, this.playerId});
+
+  GridPoint({required this.x, required this.y, this.playerId,int? timestamp, }): timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
+  
 
   Map<String, dynamic> toMap() {
     return {
       'x': x,
       'y': y,
       'playerId': playerId,
+       'timestamp': timestamp,
     };
   }
 
@@ -212,6 +216,7 @@ class GridPoint {
       x: map['x'],
       y: map['y'],
       playerId: map['playerId'],
+       timestamp: map['timestamp'],
     );
   }
 }
@@ -261,4 +266,5 @@ enum GameEndReason {
   gridFullWinBlue,  // Grille pleine - victoire bleu
   gridFullWinRed,   // Grille pleine - victoire rouge
   gridFullDraw,     // Grille pleine - match nul
+  timeout,
 }

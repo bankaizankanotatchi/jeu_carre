@@ -22,39 +22,39 @@ class RankingService {
   // CLASSEMENTS TEMPORELS
   // ============================================
 
-  // Récupérer le classement du jour
-  static Stream<List<Player>> getDailyRanking({int limit = 10}) {
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
+  // // Récupérer le classement du jour
+  // static Stream<List<Player>> getDailyRanking({int limit = 10}) {
+  //   final today = DateTime.now();
+  //   final startOfDay = DateTime(today.year, today.month, today.day);
     
-    return _playersCollection
-        .where('lastLoginAt', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
-        .orderBy('lastLoginAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return Player.fromMap(doc.data() as Map<String, dynamic>);
-          }).toList();
-        });
-  }
+  //   return _playersCollection
+  //       .where('lastLoginAt', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
+  //       .orderBy('lastLoginAt', descending: true)
+  //       .limit(limit)
+  //       .snapshots()
+  //       .map((snapshot) {
+  //         return snapshot.docs.map((doc) {
+  //           return Player.fromMap(doc.data() as Map<String, dynamic>);
+  //         }).toList();
+  //       });
+  // }
 
-  // Récupérer le classement du mois
-  static Stream<List<Player>> getMonthlyRanking({int limit = 10}) {
-    final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
+  // // Récupérer le classement du mois
+  // static Stream<List<Player>> getMonthlyRanking({int limit = 10}) {
+  //   final now = DateTime.now();
+  //   final startOfMonth = DateTime(now.year, now.month, 1);
     
-    return _playersCollection
-        .where('stats.monthlyPoints', isGreaterThan: 0)
-        .orderBy('stats.monthlyPoints', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return Player.fromMap(doc.data() as Map<String, dynamic>);
-          }).toList();
-        });
-  }
+  //   return _playersCollection
+  //       .where('stats.monthlyPoints', isGreaterThan: 0)
+  //       .orderBy('stats.monthlyPoints', descending: true)
+  //       .limit(limit)
+  //       .snapshots()
+  //       .map((snapshot) {
+  //         return snapshot.docs.map((doc) {
+  //           return Player.fromMap(doc.data() as Map<String, dynamic>);
+  //         }).toList();
+  //       });
+  // }
 
   // Récupérer le classement global (tous les temps)
   static Stream<List<Player>> getGlobalRanking({int limit = 10}) {
@@ -372,9 +372,9 @@ class RankingService {
 
       // Mettre à jour les statistiques détaillées
       var newStats = player.stats.copyWith(
-        dailyPoints: player.stats.dailyPoints + pointsScored,
-        weeklyPoints: player.stats.weeklyPoints + pointsScored,
-        monthlyPoints: player.stats.monthlyPoints + pointsScored,
+        // dailyPoints: player.stats.dailyPoints + pointsScored,
+        // weeklyPoints: player.stats.weeklyPoints + pointsScored,
+        // monthlyPoints: player.stats.monthlyPoints + pointsScored,
         bestGamePoints: pointsScored > player.stats.bestGamePoints ? pointsScored : player.stats.bestGamePoints,
         winStreak: isWinner ? player.stats.winStreak + 1 : 0,
         bestWinStreak: isWinner ? 
@@ -468,41 +468,41 @@ class RankingService {
   // RÉINITIALISATION DES STATISTIQUES TEMPORELLES
   // ============================================
 
-  // Réinitialiser les points quotidiens (à appeler une fois par jour)
-  static Future<void> resetDailyStats() async {
-    try {
-      final playersSnapshot = await _playersCollection.get();
+  // // Réinitialiser les points quotidiens (à appeler une fois par jour)
+  // static Future<void> resetDailyStats() async {
+  //   try {
+  //     final playersSnapshot = await _playersCollection.get();
       
-      for (final doc in playersSnapshot.docs) {
-        final playerData = doc.data() as Map<String, dynamic>;
-        final stats = playerData['stats'] as Map<String, dynamic>;
+  //     for (final doc in playersSnapshot.docs) {
+  //       final playerData = doc.data() as Map<String, dynamic>;
+  //       final stats = playerData['stats'] as Map<String, dynamic>;
         
-        await doc.reference.update({
-          'stats.dailyPoints': 0,
-        });
-      }
-    } catch (e) {
-      print('Erreur réinitialisation stats quotidiennes: $e');
-    }
-  }
+  //       await doc.reference.update({
+  //         'stats.dailyPoints': 0,
+  //       });
+  //     }
+  //   } catch (e) {
+  //     print('Erreur réinitialisation stats quotidiennes: $e');
+  //   }
+  // }
 
-  // Réinitialiser les points mensuels (à appeler une fois par mois)
-  static Future<void> resetMonthlyStats() async {
-    try {
-      final playersSnapshot = await _playersCollection.get();
+  // // Réinitialiser les points mensuels (à appeler une fois par mois)
+  // static Future<void> resetMonthlyStats() async {
+  //   try {
+  //     final playersSnapshot = await _playersCollection.get();
       
-      for (final doc in playersSnapshot.docs) {
-        final playerData = doc.data() as Map<String, dynamic>;
-        final stats = playerData['stats'] as Map<String, dynamic>;
+  //     for (final doc in playersSnapshot.docs) {
+  //       final playerData = doc.data() as Map<String, dynamic>;
+  //       final stats = playerData['stats'] as Map<String, dynamic>;
         
-        await doc.reference.update({
-          'stats.monthlyPoints': 0,
-        });
-      }
-    } catch (e) {
-      print('Erreur réinitialisation stats mensuelles: $e');
-    }
-  }
+  //       await doc.reference.update({
+  //         'stats.monthlyPoints': 0,
+  //       });
+  //     }
+  //   } catch (e) {
+  //     print('Erreur réinitialisation stats mensuelles: $e');
+  //   }
+  // }
 
   // ============================================
   // FONCTIONS UTILITAIRES
@@ -523,14 +523,15 @@ class RankingService {
       // Déterminer le score en fonction de la période
       int score;
       switch (period) {
-        case 'daily':
-          score = player.stats.dailyPoints;
-          break;
-        case 'weekly':
-          score = player.stats.weeklyPoints;
-          break;
+        // case 'daily':
+        //   score = player.stats.dailyPoints;
+        //   break;
+        // case 'weekly':
+        //   score = player.stats.weeklyPoints;
+        //   break;
         case 'monthly':
-          score = player.stats.monthlyPoints;
+          //score = player.stats.monthlyPoints;
+          score = player.totalPoints;
           break;
         default:
           score = player.totalPoints;
@@ -558,14 +559,15 @@ class RankingService {
       List<Player> ranking;
       
       switch (period) {
-        case 'daily':
-          ranking = await getDailyRanking(limit: topCount).first;
-          break;
+        // case 'daily':
+        //   ranking = await getDailyRanking(limit: topCount).first;
+        //   break;
         // case 'weekly':
         //   ranking = await getWeeklyRanking(limit: topCount).first;
         //  break;
         case 'monthly':
-          ranking = await getMonthlyRanking(limit: topCount).first;
+          //ranking = await getMonthlyRanking(limit: topCount).first;
+          ranking = await getGlobalRanking(limit: topCount).first;
           break;
         default:
           ranking = await getGlobalRanking(limit: topCount).first;
