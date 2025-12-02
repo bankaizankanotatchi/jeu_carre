@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
 import 'package:jeu_carre/services/ranking_service.dart';
@@ -93,7 +94,7 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   int get _winStreak => _opponentPlayer?.stats.winStreak ?? 0;
 
   // NOUVEAU GETTER: Utiliser globalRank du joueur
-  int get _globalRank => _opponentPlayer?.globalRank ?? 0;
+  
 
   @override
   void dispose() {
@@ -205,67 +206,71 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
   }
 
   // MÉTHODE OPTIMISÉE: Utiliser globalRank du joueur
-  Widget _buildRankSection() {
-
-    // UTILISER LA PROPRIÉTÉ globalRank DU JOUEUR
-    final rank = _globalRank;
-
-    return Container(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Icône de couronne pour les top 3
-          if (rank <= 3 && rank > 0)
-            Icon(
-              Icons.emoji_events,
-              color: Color(0xFFFFD700),
-              size: 16,
-            )
-          else
-            Icon(
-              Icons.leaderboard,
-              color: Color(0xFF00d4ff),
-              size: 16,
-            ),
-          
-          SizedBox(width: 6),
-          
-          // Texte du rang avec style amélioré
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'RANG',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              Text(
-                rank > 0 ? '#$rank' : 'Non classé',
-                style: TextStyle(
-                  color: rank <= 3 ? Color(0xFFFFD700) : Color(0xFF00d4ff),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'Poppins',
-                  letterSpacing: 0.5,
-                  shadows: rank <= 3 ? [
-                    Shadow(
-                      blurRadius: 10,
-                      color: Color(0xFFFFD700).withOpacity(0.5),
-                    )
-                  ] : [],
-                ),
-              ),
-            ],
+Widget _buildRankSection() {
+  // Vérifier si le joueur adverse est dans le top 10
+  final bool isInTop10 = RankingService.isPlayerInTop10(_opponentPlayer?.id ?? '');
+  final int rank = RankingService.getPlayerRank(_opponentPlayer?.id ?? '');
+  
+  return Container(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (rank <= 3 && rank > 0)
+          Icon(
+            Icons.emoji_events,
+            color: Color(0xFFFFD700),
+            size: 16,
+          )
+        else if (rank > 0)
+          Icon(
+            Icons.leaderboard,
+            color: Color(0xFF00d4ff),
+            size: 16,
+          )
+        else
+          Icon(
+            Icons.person_outline,
+            color: Colors.grey,
+            size: 16,
           ),
+        
+        SizedBox(width: 6),
+        
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'RANG',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+              ),
+            ),
+            Text(
+              rank > 0 ? '#$rank' : 'Non classé',
+              style: TextStyle(
+                color: rank <= 3 ? Color(0xFFFFD700) : 
+                       rank > 0 ? Color(0xFF00d4ff) : Colors.grey,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'Poppins',
+                letterSpacing: 0.5,
+                shadows: rank <= 3 ? [
+                  Shadow(
+                    blurRadius: 10,
+                    color: Color(0xFFFFD700).withOpacity(0.5),
+                  )
+                ] : [],
+              ),
+            ),
           ],
-      ),
-    );
-  }
-
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildWinRateRing(double winPercentage, double lossPercentage, double drawPercentage) {
     final total = winPercentage + lossPercentage + drawPercentage;
     final win = total > 0 ? winPercentage / total * 100 : 0.0;
@@ -576,19 +581,22 @@ class _OpponentProfileScreenState extends State<OpponentProfileScreen> with Sing
                           ),
                           child: ClipOval(
                             child: _displayAvatar.startsWith('http')
-                                ? Image.network(
-                                    _displayAvatar,
-                                    fit: BoxFit.cover,
-                                    width: 80,
-                                    height: 80,
-                                    errorBuilder: (context, error, stackTrace) => 
-                                      Icon(Icons.person, size: 30, color: Colors.white),
-                                  )
-                                : Center(
-                                    child: Text(
+                                ? GestureDetector(
+                                  onTap: () {
+                                    // Afficher la photo en plein écran
+                                      showFullScreenImage(context,_displayAvatar);
+                                  },
+                                  child: Image.network(
                                       _displayAvatar,
-                                      style: TextStyle(fontSize: 30),
+                                      fit: BoxFit.cover,
+                                      width: 80,
+                                      height: 80,
+                                      errorBuilder: (context, error, stackTrace) => 
+                                        Icon(Icons.person, size: 30, color: Colors.white),
                                     ),
+                                )
+                                : Center(
+                                    child: Icon(Icons.person, size: 30, color: Colors.white),
                                   ),
                           ),
                         ),

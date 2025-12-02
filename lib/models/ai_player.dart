@@ -25,17 +25,7 @@ class AIPlayer {
 
     // Temps de réflexion réaliste
     int thinkingTime;
-    switch (difficulty) {
-      case AIDifficulty.beginner:
-        thinkingTime = 1000 + Random().nextInt(2000); // 1-3 secondes
-        break;
-      case AIDifficulty.intermediate:
-        thinkingTime = 500 + Random().nextInt(1500); // 0.5-2 secondes
-        break;
-      case AIDifficulty.expert:
-        thinkingTime = 200 + Random().nextInt(800); // 0.2-1 seconde
-        break;
-    }
+    thinkingTime = 3000 + Random().nextInt(401);
     
     await Future.delayed(Duration(milliseconds: thinkingTime));
 

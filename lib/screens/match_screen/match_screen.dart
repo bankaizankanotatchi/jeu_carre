@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/models/game_request.dart';
 import 'package:jeu_carre/models/player.dart';
@@ -462,13 +463,19 @@ String _getOpponentName(dynamic request) {
                             border: Border.all(color: Colors.white, width: 2),
                           ),
                           child: ClipOval(
-                            child: Image.network(
-                              opponentAvatar,
-                              fit: BoxFit.cover,
-                              width: 50,
-                              height: 50,
-                              errorBuilder: (context, error, stackTrace) => 
-                                Icon(Icons.person, size: 24, color: Colors.white),
+                            child: GestureDetector(
+                              onTap: () {
+                                // Afficher la photo en plein écran
+                                showFullScreenImage(context, opponentAvatar);
+                              },
+                              child: Image.network(
+                                opponentAvatar,
+                                fit: BoxFit.cover,
+                                width: 50,
+                                height: 50,
+                                errorBuilder: (context, error, stackTrace) => 
+                                  Icon(Icons.person, size: 24, color: Colors.white),
+                              ),
                             ),
                           ),
                         ),
@@ -777,13 +784,19 @@ String _getOpponentName(dynamic request) {
                                     border: Border.all(color: Colors.white, width: 2),
                                   ),
                                   child: ClipOval(
-                                    child: Image.network(
-                                      game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                                      fit: BoxFit.cover,
-                                      width: 40,
-                                      height: 40,
-                                      errorBuilder: (context, error, stackTrace) => 
-                                        Icon(Icons.person, size: 20, color: Colors.white),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        // Afficher la photo en plein écran
+                                        showFullScreenImage(context, opponent?.displayAvatar ?? '👤');
+                                      },
+                                      child: Image.network(
+                                        game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                        fit: BoxFit.cover,
+                                        width: 40,
+                                        height: 40,
+                                        errorBuilder: (context, error, stackTrace) => 
+                                          Icon(Icons.person, size: 20, color: Colors.white),
+                                      ),
                                     )
                                   ),
                                 ),
@@ -903,13 +916,19 @@ String _getOpponentName(dynamic request) {
                                       border: Border.all(color: Colors.white, width: 2),
                                     ),
                                     child: ClipOval(
-                                      child: Image.network(
-                                        game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
-                                        fit: BoxFit.cover,
-                                        width: 32,
-                                        height: 32,
-                                        errorBuilder: (context, error, stackTrace) => 
-                                          Icon(Icons.person, size: 20, color: Colors.white),
+                                      child: GestureDetector(
+                                      onTap: () {
+                                        // Afficher la photo en plein écran
+                                        showFullScreenImage(context, opponent?.displayAvatar ?? '👤');
+                                      },
+                                        child: Image.network(
+                                          game.isAgainstAI ? '🤖' : opponent?.displayAvatar ?? '👤',
+                                          fit: BoxFit.cover,
+                                          width: 32,
+                                          height: 32,
+                                          errorBuilder: (context, error, stackTrace) => 
+                                            Icon(Icons.person, size: 20, color: Colors.white),
+                                        ),
                                       )
                                     ),
                                   ),

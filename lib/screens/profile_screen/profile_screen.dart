@@ -1,6 +1,7 @@
 // screens/profile_screen.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/services/game_service.dart';
@@ -9,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:jeu_carre/services/minio_storage_service.dart';
+import 'package:jeu_carre/services/ranking_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -779,11 +781,14 @@ Widget _buildHistoryTab() {
                     // Photo de profil
                     Stack(
                       children: [
-                        Container(
+                                                Container(
                           width: 80,
                           height: 80,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                            ),
                             border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
                               BoxShadow(
@@ -792,21 +797,28 @@ Widget _buildHistoryTab() {
                                 spreadRadius: 3,
                               ),
                             ],
-                            image: _currentPlayer!.avatarUrl != null
-                                ? DecorationImage(
-                                    image: NetworkImage(_currentPlayer!.avatarUrl!,),
-                                    fit: BoxFit.cover,
-                                  )
-                                : DecorationImage(
-                                    image: NetworkImage(_currentPlayer!.defaultEmoji),
-                                    fit: BoxFit.cover,
+                          ),
+                          child: ClipOval(
+                            child: _currentPlayer!.displayAvatar.startsWith('http')
+                                ? GestureDetector(
+                                  onTap: () {
+                                    // Afficher la photo en plein écran
+                                      showFullScreenImage(context,_currentPlayer!.displayAvatar);
+                                  },
+                                  child: Image.network(
+                                      _currentPlayer!.displayAvatar,
+                                      fit: BoxFit.cover,
+                                      width: 80,
+                                      height: 80,
+                                      errorBuilder: (context, error, stackTrace) => 
+                                        Icon(Icons.person, size: 30, color: Colors.white),
+                                    ),
+                                )
+                                : Center(
+                                    child: Icon(Icons.person, size: 30, color: Colors.white),
                                   ),
                           ),
-                          child: _currentPlayer!.avatarUrl == null && _currentPlayer!.defaultEmoji.isEmpty
-                              ? Icon(Icons.person, size: 30, color: Colors.white)
-                              : null,
                         ),
-                        
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -928,65 +940,73 @@ Widget _buildHistoryTab() {
     );
   }
 
-  Widget _buildRankSection() {
-    final rank = _currentPlayer?.globalRank ?? 0;
-
-    return SizedBox(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (rank <= 3 && rank > 0)
-            Icon(
-              Icons.emoji_events,
-              color: Color(0xFFFFD700),
-              size: 16,
-            )
-          else
-            Icon(
-              Icons.leaderboard,
-              color: Color(0xFF00d4ff),
-              size: 16,
-            ),
-          
-          SizedBox(width: 6),
-          
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'RANG',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              Text(
-                rank > 0 ? '#$rank' : 'Non classé',
-                style: TextStyle(
-                  color: rank <= 3 ? Color(0xFFFFD700) : Color(0xFF00d4ff),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'Poppins',
-                  letterSpacing: 0.5,
-                  shadows: rank <= 3 ? [
-                    Shadow(
-                      blurRadius: 10,
-                      color: Color(0xFFFFD700).withOpacity(0.5),
-                    )
-                  ] : [],
-                ),
-              ),
-            ],
+Widget _buildRankSection() {
+  // Vérifier si l'utilisateur est dans le top 10
+  final bool isInTop10 = RankingService.isPlayerInTop10(_currentPlayer?.id ?? '');
+  final int rank = RankingService.getPlayerRank(_currentPlayer?.id ?? '');
+  
+  return SizedBox(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (rank <= 3 && rank > 0)
+          Icon(
+            Icons.emoji_events,
+            color: Color(0xFFFFD700),
+            size: 16,
+          )
+        else if (rank > 0)
+          Icon(
+            Icons.leaderboard,
+            color: Color(0xFF00d4ff),
+            size: 16,
+          )
+        else
+          Icon(
+            Icons.person_outline,
+            color: Colors.grey,
+            size: 16,
           ),
-          
-          SizedBox(width: 8),
-          
-        ],
-      ),
-    );
-  }
+        
+        SizedBox(width: 6),
+        
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'RANG',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+              ),
+            ),
+            Text(
+              rank > 0 ? '#$rank' : 'Non classé',
+              style: TextStyle(
+                color: rank <= 3 ? Color(0xFFFFD700) : 
+                       rank > 0 ? Color(0xFF00d4ff) : Colors.grey,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'Poppins',
+                letterSpacing: 0.5,
+                shadows: rank <= 3 ? [
+                  Shadow(
+                    blurRadius: 10,
+                    color: Color(0xFFFFD700).withOpacity(0.5),
+                  )
+                ] : [],
+              ),
+            ),
+          ],
+        ),
+        
+        SizedBox(width: 8),
+      ],
+    ),
+  );
+}
 }
 
 // Painter pour dessiner des segments d'anneau proportionnels

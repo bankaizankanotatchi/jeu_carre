@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/services/PlayerService.dart';
 
@@ -308,19 +309,22 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               ),
               child: ClipOval(
                 child: player.hasAvatarImage
-                    ? Image.network(
-                        player.avatarUrl!,
-                        fit: BoxFit.cover,
-                        width: 40,
-                        height: 40,
-                        errorBuilder: (context, error, stackTrace) => 
-                          Icon(Icons.person, size: 20, color: Colors.white),
-                      )
-                    : Center(
-                        child: Text(
-                          player.defaultEmoji,
-                          style: TextStyle(fontSize: 16),
+                    ? GestureDetector(
+                         onTap: () {
+                           // Afficher la photo en plein écran
+                            showFullScreenImage(context,player.displayAvatar);
+                        },
+                      child: Image.network(
+                          player.displayAvatar,
+                          fit: BoxFit.cover,
+                          width: 40,
+                          height: 40,
+                          errorBuilder: (context, error, stackTrace) => 
+                            Icon(Icons.person, size: 20, color: Colors.white),
                         ),
+                    )
+                    : Center(
+                        child: Icon(Icons.person, size: 20, color: Colors.white),
                       ),
               ),
             ),
@@ -347,20 +351,22 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         ),
                         child: ClipOval(
                           child: player.hasAvatarImage
-                              ? Image.network(
-                                  player.avatarUrl!,
-                                  fit: BoxFit.cover,
-                                  width: 32,
-                                  height: 32,
-                                  errorBuilder: (context, error, stackTrace) => 
-                                    Icon(Icons.person, size: 16, color: Colors.white),
-                                )
-                              : Center(
-                                  child: Text(
-                                    player.defaultEmoji,
-                                    style: TextStyle(fontSize: 12),
+                              ? GestureDetector(
+                                onTap: () {
+                                    // Afficher la photo en plein écran
+                                      showFullScreenImage(context,player.displayAvatar);
+                                  },
+                                child: Image.network(
+                                    player.displayAvatar,
+                                    fit: BoxFit.cover,
+                                    width: 32,
+                                    height: 32,
+                                    errorBuilder: (context, error, stackTrace) => 
+                                      Icon(Icons.person, size: 16, color: Colors.white),
                                   ),
-                                ),
+                              )
+                              : Center(
+                                  child:Icon(Icons.person, size: 16, color: Colors.white),)
                         ),
                       ),
                       SizedBox(width: 8),

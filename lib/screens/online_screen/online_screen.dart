@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/profil_adversaire/profil_adversaire.dart';
+import 'package:jeu_carre/services/PlayerService.dart';
 import 'package:jeu_carre/services/game_service.dart';
 
 class OnlineUsersScreen extends StatefulWidget {
@@ -226,188 +227,333 @@ Widget _buildChallengeButton(Player user, List<dynamic> matchRequests) {
       ),
     );
   }
-
-  // MODIFICATION DE LA MÉTHODE _showUserProfile POUR PRENDRE EN COMPTE LES DEMANDES
-  void _showUserProfile(Player user) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StreamBuilder<List<dynamic>>(
-          stream: _matchRequestsStream,
-          builder: (context, snapshot) {
-            final matchRequests = snapshot.data ?? [];
-            
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding: EdgeInsets.all(20),
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFF2d0052),
-                      Color(0xFF1a0033),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(
-                    color: Color(0xFF9c27b0),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0xFF9c27b0).withOpacity(0.5),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                Color(0xFF00d4ff),
-                                Color(0xFF0099cc),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 90,
-                          height: 90,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
-                            ),
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0xFF9c27b0).withOpacity(0.5),
-                                blurRadius: 15,
-                                spreadRadius: 3,
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: user.avatarUrl != null
-                                ? Image.network(
-                                    user.avatarUrl!,
-                                    fit: BoxFit.cover,
-                                    width: 90,
-                                    height: 90,
-                                    errorBuilder: (context, error, stackTrace) => 
-                                      Icon(Icons.person, size: 30, color: Colors.white),
-                                  )
-                                : Image.network(
-                                    user.defaultEmoji,
-                                    fit: BoxFit.cover,
-                                    width: 90,
-                                    height: 90,
-                                    errorBuilder: (context, error, stackTrace) => 
-                                      Icon(Icons.person, size: 30, color: Colors.white),
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: user.inGame ? Colors.orange : Colors.green,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-                    Text(
-                      user.username,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '${user.totalPoints} points',
-                      style: TextStyle(
-                        color: Color(0xFF00d4ff),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    
-                    SizedBox(height: 10),
-                    
-                    // BOUTONS D'ACTION
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildChallengeButton(user, matchRequests),
-                        _buildProfileActionButton(user),
-                      ],
-                    ),
-                    
-                    SizedBox(height: 20),
-                    Container(
-                      width: double.infinity,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                          color: Color(0xFF9c27b0),
-                          width: 2,
-                        ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(15),
-                          onTap: () => Navigator.of(context).pop(),
-                          child: Center(
-                            child: Text(
-                              'FERMER',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+// MODIFICATION: Ajout du bouton de déconnexion pour admin
+Widget _buildAdminDisconnectButton(Player user, bool isAdmin) {
+  // Afficher uniquement si l'utilisateur actuel est admin ET ce n'est pas lui-même
+  final currentUserId = _getCurrentUserId();
+  final shouldShow = isAdmin && user.id != currentUserId;
+  
+  if (!shouldShow) {
+    return SizedBox.shrink();
   }
 
+  return Container(
+    width: 120,
+    height: 50,
+    margin: EdgeInsets.only(top: 8),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.red, Colors.redAccent],
+      ),
+      borderRadius: BorderRadius.circular(15),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.red.withOpacity(0.3),
+          blurRadius: 10,
+          spreadRadius: 2,
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: () => _confirmDisconnectUser(user),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout, color: Colors.white, size: 20),
+            SizedBox(height: 4),
+            Text(
+              'DÉCONNECTER',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// NOUVELLE MÉTHODE: Confirmation avant déconnexion
+void _confirmDisconnectUser(Player user) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Color(0xFF2d0052),
+      title: Text(
+        'Déconnecter le joueur',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: Text(
+        'Voulez-vous vraiment déconnecter ${user.username} ?',
+        style: TextStyle(
+          color: Colors.white70,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Annuler',
+            style: TextStyle(color: Color(0xFF00d4ff)),
+          ),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
+          onPressed: () {
+            Navigator.of(context).pop();
+            _disconnectUser(user);
+             Navigator.of(context).pop();
+          },
+          child: Text(
+            'Déconnecter',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// NOUVELLE MÉTHODE: Déconnecter l'utilisateur
+Future<void> _disconnectUser(Player user) async {
+  try {
+    // Mettre l'utilisateur hors ligne
+    await _firestore.collection('users').doc(user.id).update({
+      'isOnline': false,
+      'lastSeen': FieldValue.serverTimestamp(),
+      'wasDisconnectedByAdmin': true, // Optionnel: marquer la déconnexion
+      'disconnectTime': FieldValue.serverTimestamp(),
+    });
+
+    // Afficher un message de succès
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${user.username} a été déconnecté'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // Recharger la liste
+    setState(() {
+      _loadOnlineUsers();
+    });
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erreur: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+// MODIFICATION: Mettre à jour la méthode _showUserProfile pour inclure le bouton admin
+void _showUserProfile(Player user) async {
+  // Vérifier si l'utilisateur actuel est admin
+  final isAdmin = await _checkIfCurrentUserIsAdmin();
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StreamBuilder<List<dynamic>>(
+        stream: _matchRequestsStream,
+        builder: (context, snapshot) {
+          final matchRequests = snapshot.data ?? [];
+          
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.all(20),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF2d0052),
+                    Color(0xFF1a0033),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(
+                  color: Color(0xFF9c27b0),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF9c27b0).withOpacity(0.5),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF00d4ff),
+                              Color(0xFF0099cc),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF9c27b0), Color(0xFFe040fb)],
+                          ),
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFF9c27b0).withOpacity(0.5),
+                              blurRadius: 15,
+                              spreadRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: user.avatarUrl != null
+                              ? Image.network(
+                                  user.avatarUrl!,
+                                  fit: BoxFit.cover,
+                                  width: 90,
+                                  height: 90,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    Icon(Icons.person, size: 30, color: Colors.white),
+                                )
+                              : Image.network(
+                                  user.defaultEmoji,
+                                  fit: BoxFit.cover,
+                                  width: 90,
+                                  height: 90,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    Icon(Icons.person, size: 30, color: Colors.white),
+                                ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: user.inGame ? Colors.orange : Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    user.username,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '${user.totalPoints} points',
+                    style: TextStyle(
+                      color: Color(0xFF00d4ff),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  
+                  SizedBox(height: 15),
+                  
+                  // BOUTONS D'ACTION
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildChallengeButton(user, matchRequests),
+                          _buildProfileActionButton(user),
+                        ],
+                      ),
+                      
+                      // AJOUT: Bouton de déconnexion admin
+                      _buildAdminDisconnectButton(user, isAdmin),
+                    ],
+                  ),
+                  
+                  SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Color(0xFF9c27b0),
+                        width: 2,
+                      ),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(15),
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Center(
+                          child: Text(
+                            'FERMER',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+// NOUVELLE MÉTHODE: Vérifier si l'utilisateur actuel est admin
+Future<bool> _checkIfCurrentUserIsAdmin() async {
+  final currentPlayer = await PlayerService.isUserAdmin();
+  return currentPlayer;
+}
 
   Widget _buildProfileActionButton(Player user) {
     return Container(

@@ -20,10 +20,6 @@ class Player {
   final bool isOnline;
   final bool inGame;
   final String? currentGameId;
-  final List<String> achievements;
-  final String statusMessage;
-  final int globalRank;
-  final DateTime lastRankUpdate;
   
   // NOUVELLE PROPRIÉTÉ : Messages de l'utilisateur
   final List<UserMessage> messages;
@@ -47,13 +43,8 @@ class Player {
     this.isOnline = false,
     this.inGame = false,
     this.currentGameId,
-    List<String>? achievements,
-    this.statusMessage = '',
-    this.globalRank = 0,
-    required this.lastRankUpdate,
     List<UserMessage>? messages, // NOUVEAU
-  }) : achievements = achievements ?? [],
-       messages = messages ?? [];
+  }) : messages = messages ?? [];
 
   // NOUVEAU GETTER : Vérifier si l'utilisateur peut encore envoyer des messages
   bool get canSendMessage => messages.length < 3;
@@ -66,21 +57,6 @@ class Player {
 
   // NOUVEAU GETTER : Dernier message envoyé
   UserMessage? get lastMessage => messages.isNotEmpty ? messages.last : null;
-
-  bool get isRankUpdatedToday {
-    final now = DateTime.now();
-    return lastRankUpdate.year == now.year &&
-           lastRankUpdate.month == now.month &&
-           lastRankUpdate.day == now.day;
-  }
-
-  String get rankDisplay {
-    if (globalRank == 0) return 'Non classé';
-    if (globalRank == 1) return '🥇 1er';
-    if (globalRank == 2) return '🥈 2ème';
-    if (globalRank == 3) return '🥉 3ème';
-    return '#$globalRank';
-  }
 
   String get displayAvatar => avatarUrl ?? defaultEmoji;
   
@@ -116,10 +92,6 @@ class Player {
       'isOnline': isOnline,
       'inGame': inGame,
       'currentGameId': currentGameId,
-      'achievements': achievements,
-      'statusMessage': statusMessage,
-      'globalRank': globalRank,
-      'lastRankUpdate': lastRankUpdate.millisecondsSinceEpoch,
       'messages': messages.map((msg) => msg.toMap()).toList(), // NOUVEAU
     };
   }
@@ -144,12 +116,6 @@ class Player {
       isOnline: map['isOnline'] ?? false,
       inGame: map['inGame'] ?? false,
       currentGameId: map['currentGameId'],
-      achievements: List<String>.from(map['achievements'] ?? []),
-      statusMessage: map['statusMessage'] ?? '',
-      globalRank: map['globalRank'] ?? 0,
-      lastRankUpdate: DateTime.fromMillisecondsSinceEpoch(
-        map['lastRankUpdate'] ?? DateTime.now().millisecondsSinceEpoch
-      ),
       messages: List<UserMessage>.from( // NOUVEAU
         (map['messages'] ?? []).map((msgMap) => UserMessage.fromMap(msgMap))
       ),
@@ -190,8 +156,6 @@ class Player {
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       stats: stats ?? this.stats,
       isActive: isActive ?? this.isActive,
-      globalRank: globalRank ?? this.globalRank,
-      lastRankUpdate: lastRankUpdate ?? this.lastRankUpdate,
       messages: messages ?? this.messages, // NOUVEAU
     );
   }
@@ -224,10 +188,6 @@ class Player {
       isOnline: false,
       inGame: false,
       currentGameId: null,
-      achievements: [],
-      statusMessage: '',
-      globalRank: 0,
-      lastRankUpdate: now,
       messages: [], // Initialisé avec une liste vide
     );
   }
@@ -365,37 +325,25 @@ enum UserRole {
 // STATISTIQUES UTILISATEUR
 // ============================================
 class UserStats {
-  // final int dailyPoints;
-  // final int weeklyPoints;
-  // final int monthlyPoints;
   final int bestGamePoints;
   final int winStreak;
   final int bestWinStreak;
-  final Map<String, int> vsAIRecord;
   final int feedbacksSent;
   final int feedbacksLiked;
 
   UserStats({
-    // this.dailyPoints = 0,
-    // this.weeklyPoints = 0,
-    // this.monthlyPoints = 0,
     this.bestGamePoints = 0,
     this.winStreak = 0,
     this.bestWinStreak = 0,
-    Map<String, int>? vsAIRecord,
     this.feedbacksSent = 0,
     this.feedbacksLiked = 0,
-  }) : vsAIRecord = vsAIRecord ?? {'beginner': 0, 'intermediate': 0, 'expert': 0};
+  });
 
   Map<String, dynamic> toMap() {
     return {
-      // 'dailyPoints': dailyPoints,
-      // 'weeklyPoints': weeklyPoints,
-      // 'monthlyPoints': monthlyPoints,
       'bestGamePoints': bestGamePoints,
       'winStreak': winStreak,
       'bestWinStreak': bestWinStreak,
-      'vsAIRecord': vsAIRecord,
       'feedbacksSent': feedbacksSent,
       'feedbacksLiked': feedbacksLiked,
     };
@@ -403,13 +351,9 @@ class UserStats {
 
   static UserStats fromMap(Map<String, dynamic> map) {
     return UserStats(
-      // dailyPoints: map['dailyPoints'] ?? 0,
-      // weeklyPoints: map['weeklyPoints'] ?? 0,
-      // monthlyPoints: map['monthlyPoints'] ?? 0,
       bestGamePoints: map['bestGamePoints'] ?? 0,
       winStreak: map['winStreak'] ?? 0,
       bestWinStreak: map['bestWinStreak'] ?? 0,
-      vsAIRecord: Map<String, int>.from(map['vsAIRecord'] ?? {}),
       feedbacksSent: map['feedbacksSent'] ?? 0,
       feedbacksLiked: map['feedbacksLiked'] ?? 0,
     );
@@ -427,13 +371,9 @@ class UserStats {
     int? feedbacksLiked,
   }) {
     return UserStats(
-      // dailyPoints: dailyPoints ?? this.dailyPoints,
-      // weeklyPoints: weeklyPoints ?? this.weeklyPoints,
-      // monthlyPoints: monthlyPoints ?? this.monthlyPoints,
       bestGamePoints: bestGamePoints ?? this.bestGamePoints,
       winStreak: winStreak ?? this.winStreak,
       bestWinStreak: bestWinStreak ?? this.bestWinStreak,
-      vsAIRecord: vsAIRecord ?? this.vsAIRecord,
       feedbacksSent: feedbacksSent ?? this.feedbacksSent,
       feedbacksLiked: feedbacksLiked ?? this.feedbacksLiked,
     );

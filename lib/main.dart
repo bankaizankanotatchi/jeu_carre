@@ -8,12 +8,11 @@ import 'package:jeu_carre/screens/login_screen.dart';
 import 'package:jeu_carre/screens/navigation_screen.dart';
 import 'package:jeu_carre/screens/first_launch_rules_screen.dart';
 import 'package:jeu_carre/screens/signup_screen.dart';
-import 'package:jeu_carre/services/feedback_notification_service.dart';
-import 'package:jeu_carre/services/match_request_declined_notification.dart';
 import 'package:jeu_carre/services/match_request_notification.dart';
 import 'package:jeu_carre/services/preferences_service.dart';
 import 'package:jeu_carre/services/presence_service.dart';
 import 'package:jeu_carre/services/game_start_service.dart';
+import 'package:jeu_carre/services/ranking_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +26,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+    // Démarrer le scheduler du cache des classements
+  RankingService.startRankScheduler();
   
   runApp(const MyApp());
 }
@@ -66,11 +68,7 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
   final PresenceService _presenceService = PresenceService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final MatchNotificationService _matchNotificationService = MatchNotificationService();
-  //final FeedbackNotificationService _feedbackNotificationService = FeedbackNotificationService(); 
   final GameStartService _gameStartService = GameStartService(); 
-  
-  // 🔥 NOUVELLE INSTANCE DU SERVICE DE NOTIFICATION DES MATCHS REFUSÉS
- // final MatchNotificationDeclinedService _matchDeclinedNotificationService = MatchNotificationDeclinedService();
 
   @override
   void initState() {
@@ -86,12 +84,8 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _updatePresenceStatus(false);
     
-    // 🔥 NETTOYAGE DU NOUVEAU SERVICE
-    //_matchDeclinedNotificationService.dispose();
-    
     _matchNotificationService.dispose();
     _gameStartService.dispose();
-    //_feedbackNotificationService.dispose(); 
     super.dispose();
   }
 
@@ -102,10 +96,7 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _updatePresenceStatus(true);
         _matchNotificationService.restart();
         _gameStartService.restart();
-       // _feedbackNotificationService.restart(); 
-        
-        // 🔥 REDÉMARRER LE NOUVEAU SERVICE
-       // _matchDeclinedNotificationService.restart();
+
         break;
         
       case AppLifecycleState.paused:
@@ -115,10 +106,6 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
         _updatePresenceStatus(false);
         _matchNotificationService.stop();
         _gameStartService.stop();
-        //_feedbackNotificationService.stop();
-        
-        // 🔥 ARRÊTER LE NOUVEAU SERVICE
-        //_matchDeclinedNotificationService.stop();
         break;
     }
   }
@@ -157,10 +144,6 @@ class _MainWrapperState extends State<MainWrapper> with WidgetsBindingObserver {
       if (mounted) {
         _matchNotificationService.initialize(context);
         _gameStartService.initialize(context);
-        //_feedbackNotificationService.initialize(context); 
-        
-        // 🔥 INITIALISER LE NOUVEAU SERVICE
-        //_matchDeclinedNotificationService.initialize(context);
       }
     });
     

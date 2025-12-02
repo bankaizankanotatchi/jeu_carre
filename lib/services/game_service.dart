@@ -529,6 +529,12 @@ static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMiss
     print('  - Status: ${updatedGame.status}');
     print('  - Gagnant: ${updatedGame.winnerId}');
 
+    for (final playerId in game.players) {
+      if (!playerId.startsWith('ai_')) {
+        await _updatePlayerGameStatus(playerId, false, null);
+      }
+    }
+
     // 🎯 SAUVEGARDER LES RÉSULTATS AVEC LA PARTIE MISE À JOUR
     if (updatedGame.status == GameStatus.finished) {
       await _saveGameResults(updatedGame);
@@ -543,104 +549,7 @@ static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMiss
   }
 }
 
-// ============================================================
-  // GESTION DES SPECTATEURS
-  // ============================================================
 
-//   /// Récupérer les spectateurs d'une partie en temps réel
-//   static Stream<List<String>> getGameSpectators(String gameId) {
-//     return gamesCollection.doc(gameId).snapshots().map((snapshot) {
-//       if (snapshot.exists) {
-//         final data = snapshot.data() as Map<String, dynamic>;
-//         return List<String>.from(data['spectators'] ?? []);
-//       }
-//       return [];
-//     });
-//   }
-
-//   /// Récupérer les informations des spectateurs avec leurs profils
-//   static Stream<List<Player>> getSpectatorsWithProfiles(String gameId) {
-//     return getGameSpectators(gameId).asyncMap((spectatorIds) async {
-//       final spectators = <Player>[];
-//       for (final id in spectatorIds) {
-//         final player = await getPlayer(id);
-//         if (player != null) {
-//           spectators.add(player);
-//         }
-//       }
-//       return spectators;
-//     });
-//   }
-
-//   /// Rejoindre une partie en tant que spectateur
-//   static Future<void> joinAsSpectator(String gameId, String userId) async {
-//     try {
-//       final gameDoc = await gamesCollection.doc(gameId).get();
-//       if (!gameDoc.exists) throw Exception('Partie non trouvée');
-
-//       final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-      
-//       if (!(game.gameSettings['allowSpectators'] ?? false)) {
-//         throw Exception('Les spectateurs ne sont pas autorisés pour cette partie');
-//       }
-
-//       final maxSpectators = game.gameSettings['maxSpectators'] ?? 50;
-//       if (game.spectators.length >= maxSpectators) {
-//         throw Exception('Limite de spectateurs atteinte');
-//       }
-
-//       if (game.players.contains(userId)) {
-//         throw Exception('Vous êtes déjà dans cette partie');
-//       }
-
-//       if (game.spectators.contains(userId)) {
-//         throw Exception('Vous observez déjà cette partie');
-//       }
-
-//       await gamesCollection.doc(gameId).update({
-//         'spectators': FieldValue.arrayUnion([userId]),
-//         'updatedAt': DateTime.now().millisecondsSinceEpoch,
-//       });
-
-//       await spectatorsCollection.doc(gameId).set({
-//         'gameId': gameId,
-//         'spectators': FieldValue.arrayUnion([userId]),
-//         'updatedAt': DateTime.now().millisecondsSinceEpoch,
-//       }, SetOptions(merge: true));
-//     } catch (e) {
-//       throw Exception('Erreur rejoindre spectateur: $e');
-//     }
-//   }
-
-// /// Quitter une partie en tant que spectateur
-// static Future<void> leaveAsSpectator(String gameId, String userId) async {
-//   try {
-//     // Mettre à jour le document de jeu
-//     await gamesCollection.doc(gameId).update({
-//       'spectators': FieldValue.arrayRemove([userId]),
-//       'updatedAt': DateTime.now().millisecondsSinceEpoch,
-//     });
-
-//     // Mettre à jour la collection spectateurs avec gestion d'erreur
-//     try {
-//       final spectatorDoc = await spectatorsCollection.doc(gameId).get();
-//       if (spectatorDoc.exists) {
-//         await spectatorsCollection.doc(gameId).update({
-//           'spectators': FieldValue.arrayRemove([userId]),
-//           'updatedAt': DateTime.now().millisecondsSinceEpoch,
-//         });
-//       } else {
-//         print('ℹ️ Document spectateurs non trouvé, création non nécessaire');
-//       }
-//     } catch (e) {
-//       print('⚠️ Erreur document spectateurs: $e');
-//     }
-//   } catch (e) {
-//     print('❌ Erreur quitter spectateur: $e');
-//     // Ne pas relancer l'exception pour éviter les crashs
-//   }
-// }
-  
   // ============================================================
   // RÉCUPÉRATION DES PARTIES - STREAMS OPTIMISÉS
   // ============================================================
@@ -688,29 +597,6 @@ static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMiss
             .cast<Game>()
             .toList());
   }
-
-  /// Récupérer toutes les parties publiques actives
-  // static Stream<List<Game>> getAllActiveGames() {
-  //   return gamesCollection
-  //       .where('status', isEqualTo: GameStatus.playing.toString())
-  //       .where('gameSettings.allowSpectators', isEqualTo: true)
-  //       .orderBy('updatedAt', descending: true)
-  //       .limit(50)
-  //       .snapshots()
-  //       .handleError((error) => print('Erreur stream parties publiques: $error'))
-  //       .map((snapshot) => snapshot.docs
-  //           .map((doc) {
-  //             try {
-  //               return Game.fromMap(doc.data() as Map<String, dynamic>);
-  //             } catch (e) {
-  //               print('Erreur parsing partie publique: $e');
-  //               return null;
-  //             }
-  //           })
-  //           .where((game) => game != null)
-  //           .cast<Game>()
-  //           .toList());
-  // }
 
   /// Récupérer l'historique des parties
   static Stream<List<Game>> getGameHistory({int limit = 20}) {
@@ -1400,150 +1286,6 @@ static Stream<Map<String, dynamic>> getQuickMessages(String gameId) {
         }
         return {};
       });
-}
-
-// Dans GameService
-static Future<void> checkAndPenalizeInactivePlayers(String gameId) async {
-  try {
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) return;
-    
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    if (game.status == GameStatus.finished) return;
-    
-    final lastPoint = game.points.isNotEmpty ? game.points.last : null;
-    if (lastPoint == null) return;
-
-    // 🆕 CORRECTION : GESTION SÉCURISÉE DU TIMESTAMP
-    final lastMoveTimestamp = _getSafeTimestamp(lastPoint);
-    
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final timeSinceLastMove = (now - lastMoveTimestamp) ~/ 1000;
-    
-    print('🔍 Vérification inactivité: $timeSinceLastMove secondes depuis dernier coup');
-    
-    if (timeSinceLastMove >= 45) {
-      final currentPlayerId = game.currentPlayer;
-      print('⏰🚨 JOUEUR INACTIF DÉTECTÉ: $currentPlayerId ($timeSinceLastMove secondes)');
-      
-      await _finishGameByInactivity(gameId, currentPlayerId);
-    }
-  } catch (e) {
-    print('❌ Erreur vérification inactivité: $e');
-  }
-}
-
-// 🆕 MÉTHODE UTILITAIRE POUR OBTENIR UN TIMESTAMP SÉCURISÉ
-static int _getSafeTimestamp(GridPoint point) {
-
-  try {
-    // Vérifier le type du timestamp et le convertir en int
-    if (point.timestamp is bool) {
-      return point.timestamp;
-    } else if (point.timestamp is String) {
-      return int.tryParse(point.timestamp as String) ?? DateTime.now().millisecondsSinceEpoch;
-    } else if (point.timestamp is double) {
-      return (point.timestamp as double).round();
-    } else {
-      print('⚠️ Type de timestamp non géré: ${point.timestamp.runtimeType}');
-      return DateTime.now().millisecondsSinceEpoch;
-    }
-  } catch (e) {
-    print('⚠️ Erreur conversion timestamp: $e');
-    return DateTime.now().millisecondsSinceEpoch;
-  }
-}
-
-static Future<void> _finishGameByInactivity(String gameId, String inactivePlayerId) async {
-  try {
-    print('🎯 DÉBUT _finishGameByInactivity pour $inactivePlayerId');
-    
-    // 🎯 RÉCUPÉRER LA PARTIE ACTUALISÉE
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) {
-      print('❌ Partie non trouvée: $gameId');
-      return;
-    }
-
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    
-    // 🚫 VÉRIFIER QUE LA PARTIE N'EST PAS DÉJÀ TERMINÉE
-    if (game.status == GameStatus.finished) {
-      print('ℹ️ Partie déjà terminée: $gameId');
-      return;
-    }
-
-    print('🔍 État de la partie AVANT transfert:');
-    print('  - Player1 (${game.player1Id}): ${game.scores[game.player1Id]} points');
-    print('  - Player2 (${game.player2Id}): ${game.scores[game.player2Id]} points');
-    print('  - Joueur inactif: $inactivePlayerId');
-
-    // 🎯 IDENTIFIER LE GAGNANT (l'adversaire)
-    final winnerId = inactivePlayerId == game.player1Id ? game.player2Id : game.player1Id;
-    
-    if (winnerId == null) {
-      print('❌ Impossible de déterminer le gagnant');
-      return;
-    }
-
-    // 🎯 CALCULER LES NOUVEAUX SCORES (MÊME LOGIQUE QUE 3 TOURS MANQUÉS)
-    final loserScore = game.scores[inactivePlayerId] ?? 0;
-    final winnerScore = game.scores[winnerId] ?? 0;
-    final newWinnerScore = winnerScore + loserScore + 1; // +1 point bonus
-    
-    print('💰 CALCUL SCORES:');
-    print('  - Score gagnant initial: $winnerScore');
-    print('  - Score perdant: $loserScore');
-    print('  - Score gagnant final: $newWinnerScore (avec bonus +1)');
-
-    // 🎯 CRÉER LES SCORES FINAUX
-    final finalScores = {
-      winnerId: newWinnerScore,
-      inactivePlayerId: 0, // 🎯 PERDANT À 0 POINTS
-    };
-
-    print('🏆 SCORES FINAUX: $finalScores');
-
-    // 🎯 METTRE À JOUR LA PARTIE EN UNE SEULE OPÉRATION ATOMIQUE
-    final updateData = {
-      'scores': finalScores,
-      'status': GameStatus.finished.toString(),
-      'winnerId': winnerId,
-      'endReason': GameEndReason.timeout.toString(), // 🆕 RAISON "TIMEOUT"
-      'finishedAt': DateTime.now().millisecondsSinceEpoch,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    };
-
-    print('📝 MISE À JOUR FIRESTORE: $updateData');
-
-    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
-    await gamesCollection.doc(gameId).update(updateData);
-    print('✅ Partie mise à jour dans Firestore');
-
-    // 🎯 ATTENDRE LA SYNCHRONISATION PUIS RÉCUPÉRER LA PARTIE MISE À JOUR
-    await Future.delayed(Duration(milliseconds: 500));
-    
-    final updatedGameDoc = await gamesCollection.doc(gameId).get();
-    final updatedGame = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
-    
-    print('🔍 État de la partie APRÈS transfert:');
-    print('  - Player1 (${updatedGame.player1Id}): ${updatedGame.scores[updatedGame.player1Id]} points');
-    print('  - Player2 (${updatedGame.player2Id}): ${updatedGame.scores[updatedGame.player2Id]} points');
-    print('  - Status: ${updatedGame.status}');
-    print('  - Gagnant: ${updatedGame.winnerId}');
-
-    // 🎯 SAUVEGARDER LES RÉSULTATS AVEC LA PARTIE MISE À JOUR
-    if (updatedGame.status == GameStatus.finished) {
-      await _saveGameResults(updatedGame);
-      print('✅ Résultats sauvegardés avec les scores transférés');
-    } else {
-      print('❌ ERREUR: La partie n\'est pas marquée comme terminée après update!');
-    }
-
-  } catch (e) {
-    print('❌ Erreur critique dans _finishGameByInactivity: $e');
-    print('❌ Stack trace: ${e.toString()}');
-  }
 }
 
 }

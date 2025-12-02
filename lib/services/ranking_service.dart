@@ -1,8 +1,6 @@
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/models/player.dart';
 
 class RankingService {
@@ -13,50 +11,16 @@ class RankingService {
       _firestore.collection('users');
   static final CollectionReference _gamesCollection = 
       _firestore.collection('games');
-  static final CollectionReference _dailyStatsCollection = 
-      _firestore.collection('daily_stats');
-  static final CollectionReference _monthlyStatsCollection = 
-      _firestore.collection('monthly_stats');
+
+  // Cache pour le top 10
+  static List<Player> _top10Cache = [];
+  static DateTime? _lastTop10Update;
 
   // ============================================
-  // CLASSEMENTS TEMPORELS
+  // CLASSEMENT GLOBAL
   // ============================================
 
-  // // Récupérer le classement du jour
-  // static Stream<List<Player>> getDailyRanking({int limit = 10}) {
-  //   final today = DateTime.now();
-  //   final startOfDay = DateTime(today.year, today.month, today.day);
-    
-  //   return _playersCollection
-  //       .where('lastLoginAt', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
-  //       .orderBy('lastLoginAt', descending: true)
-  //       .limit(limit)
-  //       .snapshots()
-  //       .map((snapshot) {
-  //         return snapshot.docs.map((doc) {
-  //           return Player.fromMap(doc.data() as Map<String, dynamic>);
-  //         }).toList();
-  //       });
-  // }
-
-  // // Récupérer le classement du mois
-  // static Stream<List<Player>> getMonthlyRanking({int limit = 10}) {
-  //   final now = DateTime.now();
-  //   final startOfMonth = DateTime(now.year, now.month, 1);
-    
-  //   return _playersCollection
-  //       .where('stats.monthlyPoints', isGreaterThan: 0)
-  //       .orderBy('stats.monthlyPoints', descending: true)
-  //       .limit(limit)
-  //       .snapshots()
-  //       .map((snapshot) {
-  //         return snapshot.docs.map((doc) {
-  //           return Player.fromMap(doc.data() as Map<String, dynamic>);
-  //         }).toList();
-  //       });
-  // }
-
-  // Récupérer le classement global (tous les temps)
+  // Récupérer le classement global (top 10)
   static Stream<List<Player>> getGlobalRanking({int limit = 10}) {
     return _playersCollection
         .where('totalPoints', isGreaterThan: 0)
@@ -64,167 +28,74 @@ class RankingService {
         .limit(limit)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
+          final players = snapshot.docs.map((doc) {
             return Player.fromMap(doc.data() as Map<String, dynamic>);
           }).toList();
-        });
-  }
-
-  static Stream<List<Player>> getAllGlobalRanking() {
-    return _playersCollection
-        .where('totalPoints', isGreaterThan: 0)
-        .orderBy('totalPoints', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return Player.fromMap(doc.data() as Map<String, dynamic>);
-          }).toList();
+          
+          // Mettre à jour le cache pour le top 10
+          if (limit == 10) {
+            _top10Cache = players;
+            _lastTop10Update = DateTime.now();
+          }
+          
+          return players;
         });
   }
 
   // ============================================
-  // CALCUL ET MISE À JOUR DES RANGS GLOBAUX
+  // MISE À JOUR APRÈS UNE PARTIE
   // ============================================
 
-  /// Calculer et mettre à jour le rang global de TOUS les joueurs
-  static Future<void> updateAllGlobalRanks() async {
-    try {
-      print('🔄 Début calcul des rangs globaux...');
-      
-      // 1. Récupérer tous les joueurs triés par points (décroissant)
-      final playersSnapshot = await _playersCollection
-          .where('totalPoints', isGreaterThan: 0)
-          .orderBy('totalPoints', descending: true)
-          .get();
-
-      final totalPlayers = playersSnapshot.size;
-      print('📊 $totalPlayers joueurs à classer');
-
-      if (totalPlayers == 0) {
-        print('ℹ️ Aucun joueur à classer');
-        return;
-      }
-
-      // 2. Préparer le batch update
-      final batch = _firestore.batch();
-      int rank = 1;
-
-      // 3. Attribuer les rangs (1 = meilleur)
-      for (final doc in playersSnapshot.docs) {
-        batch.update(doc.reference, {
-          'globalRank': rank,
-          'lastRankUpdate': DateTime.now().millisecondsSinceEpoch,
-        });
-        rank++;
-      }
-
-      // 4. Exécuter la mise à jour
-      await batch.commit();
-      print('✅ Rangs globaux mis à jour pour $totalPlayers joueurs');
-
-    } catch (e) {
-      print('❌ Erreur calcul rangs globaux: $e');
-      rethrow;
-    }
-  }
-
-  /// Mettre à jour le rang global d'UN joueur spécifique
-  static Future<void> updatePlayerGlobalRank(String playerId) async {
-    try {
-      // 1. Récupérer le joueur
-      final playerDoc = await _playersCollection.doc(playerId).get();
-      if (!playerDoc.exists) {
-        print('❌ Joueur non trouvé: $playerId');
-        return;
-      }
-
-      final playerData = playerDoc.data() as Map<String, dynamic>;
-      final playerPoints = playerData['totalPoints'] as int? ?? 0;
-
-      // 2. Si le joueur n'a pas de points, le mettre en dernier
-      if (playerPoints == 0) {
-        final totalPlayersCount = await _playersCollection
-            .where('totalPoints', isGreaterThan: 0)
-            .count()
-            .get();
-        
-        final rank = totalPlayersCount.count! + 1; // Dernière position
-        
-        await playerDoc.reference.update({
-          'globalRank': rank,
-          'lastRankUpdate': DateTime.now().millisecondsSinceEpoch
-        });
-        
-        print('📝 Joueur sans points mis en position $rank: $playerId');
-        return;
-      }
-
-      // 3. Compter combien de joueurs ont PLUS de points que lui
-      final betterPlayersCount = await _playersCollection
-          .where('totalPoints', isGreaterThan: playerPoints)
-          .count()
-          .get();
-
-      // 4. Le rang = nombre de joueurs avec plus de points + 1
-      final rank = betterPlayersCount.count! + 1;
-
-      // 5. Mettre à jour le rang
-      await playerDoc.reference.update({
-        'globalRank': rank,
-        'lastRankUpdate': DateTime.now().millisecondsSinceEpoch
-      });
-
-      print('✅ Rang mis à jour: $playerId → #$rank');
-
-    } catch (e) {
-      print('❌ Erreur mise à jour rang joueur $playerId: $e');
-    }
-  }
-
-  /// Mettre à jour les rangs de plusieurs joueurs après une partie
+  /// Mettre à jour les rangs après une partie
   static Future<void> updateRanksAfterGame(List<String> playerIds) async {
     try {
       print('🔄 Mise à jour des rangs après partie pour ${playerIds.length} joueurs...');
       
-      for (final playerId in playerIds) {
-        if (!playerId.startsWith('ai_')) { // Ignorer les IA
-          await updatePlayerGlobalRank(playerId);
-        }
-      }
+      // Rafraîchir le cache du top 10
+      await refreshTop10Cache();
       
-      print('✅ Rangs mis à jour pour tous les joueurs de la partie');
+      print('✅ Top 10 mis à jour après la partie');
     } catch (e) {
       print('❌ Erreur mise à jour rangs après partie: $e');
     }
   }
 
+  // ============================================
+  // FONCTIONS UTILITAIRES
+  // ============================================
 
-  /// Fonction pour compter le nombre de joueurs actifs (avec points)
-  static Future<int?> getActivePlayersCount() async {
+  // Fonction pour compter le nombre de joueurs actifs (avec points)
+  static Future<int> getActivePlayersCount() async {
     try {
       final countSnapshot = await _playersCollection
           .where('totalPoints', isGreaterThan: 0)
           .count()
           .get();
-      return countSnapshot.count;
+      return countSnapshot.count ?? 0;
     } catch (e) {
       print('❌ Erreur comptage joueurs actifs: $e');
       return 0;
     }
   }
 
-  /// Récupérer le rang d'un joueur spécifique
-  static Future<int> getPlayerRank(String playerId) async {
-    try {
-      final playerDoc = await _playersCollection.doc(playerId).get();
-      if (!playerDoc.exists) return 0;
-      
-      final playerData = playerDoc.data() as Map<String, dynamic>;
-      return playerData['globalRank'] ?? 0;
-    } catch (e) {
-      print('❌ Erreur récupération rang joueur: $e');
-      return 0;
-    }
+
+// Récupérer le rang d'un joueur spécifique (uniquement s'il est dans le top 10)
+static int getPlayerRank(String playerId) {
+  // Vérifier si le joueur est dans le top 10 (cache)
+  final index = _top10Cache.indexWhere((player) => player.id == playerId);
+  return index >= 0 ? index + 1 : 0; // 0 = non classé
+}
+  // Vérifier si un joueur est dans le top 10 (via cache)
+  static bool isPlayerInTop10(String playerId) {
+    return _top10Cache.any((player) => player.id == playerId);
+  }
+
+  // Récupérer le rang d'un joueur dans le top 10
+  static int? getPlayerRankInTop10(String playerId) {
+    if (_top10Cache.isEmpty) return null;
+    
+    final index = _top10Cache.indexWhere((player) => player.id == playerId);
+    return index >= 0 ? index + 1 : null;
   }
 
   // ============================================
@@ -247,12 +118,17 @@ class RankingService {
 
       for (final doc in playersSnapshot.docs) {
         final playerData = doc.data() as Map<String, dynamic>;
-        final pts = playerData['totalPoints'] as num?;
-        totalPoints += pts?.toInt() ?? 0;
+        final pts = (playerData['totalPoints'] as num?)?.toInt() ?? 0;
+        totalPoints += pts;
         
         final lastLogin = playerData['lastLoginAt'];
-        if (lastLogin != null && lastLogin >= startOfDay.millisecondsSinceEpoch) {
-          activeToday++;
+        if (lastLogin != null) {
+          final lastLoginTime = DateTime.fromMillisecondsSinceEpoch(
+            (lastLogin as num).toInt()
+          );
+          if (lastLoginTime.isAfter(startOfDay)) {
+            activeToday++;
+          }
         }
       }
 
@@ -301,8 +177,8 @@ class RankingService {
         final gameData = gameDoc.data() as Map<String, dynamic>;
         
         // Durée moyenne des parties
-        final createdAt = gameData['createdAt'];
-        final finishedAt = gameData['finishedAt'];
+        final createdAt = gameData['createdAt'] as int?;
+        final finishedAt = gameData['finishedAt'] as int?;
         if (createdAt != null && finishedAt != null) {
           final duration = (finishedAt - createdAt) / 1000; // en secondes
           averageGameDuration += duration;
@@ -320,7 +196,10 @@ class RankingService {
         // Scores récents
         final scores = gameData['scores'] as Map<String, dynamic>?;
         if (scores != null && scores[playerId] != null) {
-          recentScores.add((scores[playerId] as num).toInt());
+          final score = scores[playerId];
+          if (score is num) {
+            recentScores.add(score.toInt());
+          }
         }
       }
 
@@ -354,7 +233,7 @@ class RankingService {
     required bool isWinner,
     required int pointsScored,
     required bool isAgainstAI,
-    required AIDifficulty? aiDifficulty,
+    required String? aiDifficulty,
     required int gameDuration, // en secondes
   }) async {
     try {
@@ -369,12 +248,10 @@ class RankingService {
       final newGamesPlayed = player.gamesPlayed + 1;
       final newGamesWon = player.gamesWon + (isWinner ? 1 : 0);
       final newGamesLost = player.gamesLost + (isWinner ? 0 : 1);
+      final now = DateTime.now();
 
       // Mettre à jour les statistiques détaillées
       var newStats = player.stats.copyWith(
-        // dailyPoints: player.stats.dailyPoints + pointsScored,
-        // weeklyPoints: player.stats.weeklyPoints + pointsScored,
-        // monthlyPoints: player.stats.monthlyPoints + pointsScored,
         bestGamePoints: pointsScored > player.stats.bestGamePoints ? pointsScored : player.stats.bestGamePoints,
         winStreak: isWinner ? player.stats.winStreak + 1 : 0,
         bestWinStreak: isWinner ? 
@@ -383,27 +260,16 @@ class RankingService {
             player.stats.bestWinStreak,
       );
 
-      // Mettre à jour le record contre IA si applicable
-      if (isAgainstAI && aiDifficulty != null) {
-        final difficultyKey = aiDifficulty.toString().split('.').last;
-        final currentRecord = Map<String, int>.from(player.stats.vsAIRecord);
-        currentRecord[difficultyKey] = (currentRecord[difficultyKey] ?? 0) + (isWinner ? 1 : 0);
-        newStats = newStats.copyWith(vsAIRecord: currentRecord);
-      }
-
       final updatedPlayer = player.copyWith(
         totalPoints: newTotalPoints,
         gamesPlayed: newGamesPlayed,
         gamesWon: newGamesWon,
         gamesLost: newGamesLost,
+        lastLoginAt: now,
         stats: newStats,
-        lastLoginAt: DateTime.now(),
       );
 
       await _playersCollection.doc(playerId).update(updatedPlayer.toMap());
-
-      // Mettre à jour les statistiques globales
-      await _updateGlobalStats(pointsScored, isWinner);
 
     } catch (e) {
       print('Erreur mise à jour statistiques: $e');
@@ -411,101 +277,8 @@ class RankingService {
     }
   }
 
-  // Mettre à jour les statistiques globales de la plateforme
-  static Future<void> _updateGlobalStats(int pointsScored, bool isWinner) async {
-    try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      
-      // Statistiques du jour
-      final dailyDocRef = _dailyStatsCollection.doc('${today.year}-${today.month}-${today.day}');
-      final monthlyDocRef = _monthlyStatsCollection.doc('${today.year}-${today.month}-${today.day}');
-      final dailyDoc = await dailyDocRef.get();
-      final monthlyDoc = await monthlyDocRef.get();
-      
-      if (dailyDoc.exists) {
-        await dailyDocRef.update({
-          'totalPoints': FieldValue.increment(pointsScored),
-          'totalGames': FieldValue.increment(1),
-          'totalWins': FieldValue.increment(isWinner ? 1 : 0),
-          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
-        });
-      } else {
-        await dailyDocRef.set({
-          'date': today.millisecondsSinceEpoch,
-          'totalPoints': pointsScored,
-          'totalGames': 1,
-          'totalWins': isWinner ? 1 : 0,
-          'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
-        });
-      }
-
-      if (monthlyDoc.exists) {
-        await monthlyDocRef.update({
-          'totalPoints': FieldValue.increment(pointsScored),
-          'totalGames': FieldValue.increment(1),
-          'totalWins': FieldValue.increment(isWinner ? 1 : 0),
-          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
-        });
-      } else {
-        await monthlyDocRef.set({
-          'date': today.millisecondsSinceEpoch,
-          'totalPoints': pointsScored,
-          'totalGames': 1,
-          'totalWins': isWinner ? 1 : 0,
-          'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'lastUpdated': DateTime.now().millisecondsSinceEpoch,
-        });
-      }
-
-    } catch (e) {
-      print('Erreur mise à jour stats globales: $e');
-    }
-  }
-
   // ============================================
-  // RÉINITIALISATION DES STATISTIQUES TEMPORELLES
-  // ============================================
-
-  // // Réinitialiser les points quotidiens (à appeler une fois par jour)
-  // static Future<void> resetDailyStats() async {
-  //   try {
-  //     final playersSnapshot = await _playersCollection.get();
-      
-  //     for (final doc in playersSnapshot.docs) {
-  //       final playerData = doc.data() as Map<String, dynamic>;
-  //       final stats = playerData['stats'] as Map<String, dynamic>;
-        
-  //       await doc.reference.update({
-  //         'stats.dailyPoints': 0,
-  //       });
-  //     }
-  //   } catch (e) {
-  //     print('Erreur réinitialisation stats quotidiennes: $e');
-  //   }
-  // }
-
-  // // Réinitialiser les points mensuels (à appeler une fois par mois)
-  // static Future<void> resetMonthlyStats() async {
-  //   try {
-  //     final playersSnapshot = await _playersCollection.get();
-      
-  //     for (final doc in playersSnapshot.docs) {
-  //       final playerData = doc.data() as Map<String, dynamic>;
-  //       final stats = playerData['stats'] as Map<String, dynamic>;
-        
-  //       await doc.reference.update({
-  //         'stats.monthlyPoints': 0,
-  //       });
-  //     }
-  //   } catch (e) {
-  //     print('Erreur réinitialisation stats mensuelles: $e');
-  //   }
-  // }
-
-  // ============================================
-  // FONCTIONS UTILITAIRES
+  // FONCTIONS UTILITAIRES POUR L'UI
   // ============================================
 
   // Formater les données pour l'affichage dans l'UI
@@ -514,28 +287,13 @@ class RankingService {
       final index = entry.key;
       final player = entry.value;
       
-      // Déterminer l'emoji en fonction du rang
-    String avatarEmoji = player.displayAvatar; // ← Ça utilise avatarUrl OU defaultEmoji
+      String avatarEmoji = player.displayAvatar;
 
       // Déterminer la tendance (simulée pour l'exemple)
       final trend = ['up', 'down', 'stable'][index % 3];
 
-      // Déterminer le score en fonction de la période
-      int score;
-      switch (period) {
-        // case 'daily':
-        //   score = player.stats.dailyPoints;
-        //   break;
-        // case 'weekly':
-        //   score = player.stats.weeklyPoints;
-        //   break;
-        case 'monthly':
-          //score = player.stats.monthlyPoints;
-          score = player.totalPoints;
-          break;
-        default:
-          score = player.totalPoints;
-      }
+      // Score (toujours totalPoints maintenant)
+      int score = player.totalPoints;
 
       return {
         'name': player.username,
@@ -543,6 +301,7 @@ class RankingService {
         'avatar': avatarEmoji,
         'trend': trend,
         'playerId': player.id,
+        'rank': index + 1, // Rang calculé localement
       };
     }).toList();
 
@@ -554,25 +313,9 @@ class RankingService {
   }
 
   // Vérifier si un joueur est dans le top
-  static Future<bool> isPlayerInTop(String playerId, String period, int topCount) async {
+  static Future<bool> isPlayerInTop(String playerId, int topCount) async {
     try {
-      List<Player> ranking;
-      
-      switch (period) {
-        // case 'daily':
-        //   ranking = await getDailyRanking(limit: topCount).first;
-        //   break;
-        // case 'weekly':
-        //   ranking = await getWeeklyRanking(limit: topCount).first;
-        //  break;
-        case 'monthly':
-          //ranking = await getMonthlyRanking(limit: topCount).first;
-          ranking = await getGlobalRanking(limit: topCount).first;
-          break;
-        default:
-          ranking = await getGlobalRanking(limit: topCount).first;
-      }
-
+      final ranking = await getGlobalRanking(limit: topCount).first;
       return ranking.any((player) => player.id == playerId);
     } catch (e) {
       return false;
@@ -580,21 +323,39 @@ class RankingService {
   }
 
   // ============================================
-  // PROGRAMMATION AUTOMATIQUE DES MISES À JOUR
+  // GESTION DU CACHE
   // ============================================
 
-  /// Démarrer le scheduler pour les mises à jour automatiques
-  static void startRankScheduler() {
-    // Mettre à jour tous les rangs toutes les 6 heures
-    Timer.periodic(Duration(hours: 6), (timer) {
-      updateAllGlobalRanks();
-    });
-    
-    print('⏰ Scheduler des rangs démarré (mise à jour toutes les 6h)');
+  /// Rafraîchir le cache du top 10
+  static Future<void> refreshTop10Cache() async {
+    try {
+      final snapshot = await _playersCollection
+          .where('totalPoints', isGreaterThan: 0)
+          .orderBy('totalPoints', descending: true)
+          .limit(10)
+          .get();
+      
+      _top10Cache = snapshot.docs.map((doc) {
+        return Player.fromMap(doc.data() as Map<String, dynamic>);
+      }).toList();
+      
+      _lastTop10Update = DateTime.now();
+      print('✅ Cache top 10 rafraîchi (${_top10Cache.length} joueurs)');
+    } catch (e) {
+      print('❌ Erreur rafraîchissement cache top 10: $e');
+    }
   }
 
-  /// Forcer la mise à jour immédiate de tous les rangs
-  static Future<void> forceUpdateAllRanks() async {
-    await updateAllGlobalRanks();
+  /// Démarrer le scheduler pour rafraîchir le cache
+  static void startRankScheduler() {
+    // Rafraîchir le cache toutes les 5 minutes (en backup)
+    Timer.periodic(Duration(minutes: 5), (timer) {
+      refreshTop10Cache();
+    });
+    
+    // Rafraîchir au démarrage
+    refreshTop10Cache();
+    
+    print('⏰ Scheduler du cache démarré (rafraîchissement toutes les 5 min)');
   }
 }

@@ -266,5 +266,4 @@ enum GameEndReason {
   gridFullWinBlue,  // Grille pleine - victoire bleu
   gridFullWinRed,   // Grille pleine - victoire rouge
   gridFullDraw,     // Grille pleine - match nul
-  timeout,
 }

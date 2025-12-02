@@ -43,7 +43,7 @@ class _GameRulesScreenState extends State<GameRulesScreen> with SingleTickerProv
     },
     {
       'title': '⏱️ TIMERS',
-      'description': '15 secondes par coup • 3 minutes par partie totale • 3 tours manqués = défaite automatique • au debut de chaque partie vous pouvez changer ces paramètres sauf pour la pénalité',
+      'description': '15 secondes par coup • 3 minutes par partie totale • 3 tours manqués ou Abandon = défaite automatique • au debut de chaque partie vous pouvez changer ces paramètres sauf pour la pénalité',
       'illustration': 'timers',
     },
     {

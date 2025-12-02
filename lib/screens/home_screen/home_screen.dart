@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/ai_player.dart';
-import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/screens/game_mode_screen/game_mode_screen.dart';
 import 'package:jeu_carre/screens/game_rule_screen/gamerule_screen.dart';
 import 'package:jeu_carre/screens/online_screen/online_screen.dart';
-import 'package:jeu_carre/screens/profil_adversaire/profil_adversaire.dart';
 import 'package:jeu_carre/services/ranking_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,8 +22,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   double _scrollOffset = 0.0;
 
   // Données de classement
-  List<Map<String, dynamic>> _dailyRanking = [];
-  List<Map<String, dynamic>> _monthlyRanking = [];
    List<Map<String, dynamic>> _globalRanking = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -76,48 +73,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   void _loadRealTimeRankings() {
     try {
-      // Classement du jour
-      // _dailySubscription = RankingService.getDailyRanking(limit: 10).listen(
-      //   (players) {
-      //     try {
-      //       final formatted = RankingService.formatRankingData(players, 'daily');
-      //       if (mounted) {
-      //         setState(() {
-      //           _dailyRanking = formatted['players'];
-      //           _isLoading = false;
-      //         });
-      //       }
-      //     } catch (e) {
-      //       _handleError('Erreur de formatage des données');
-      //     }
-      //   },
-      //   onError: (error) {
-      //     _handleError('Erreur connexion classement jour');
-      //   },
-      //   cancelOnError: false,
-      // );
-
-      // // Classement du mois
-      // _monthlySubscription = RankingService.getMonthlyRanking(limit: 10).listen(
-      //   (players) {
-      //     try {
-      //       final formatted = RankingService.formatRankingData(players, 'monthly');
-      //       if (mounted) {
-      //         setState(() {
-      //           _monthlyRanking = formatted['players'];
-      //           _isLoading = false;
-      //         });
-      //       }
-      //     } catch (e) {
-      //       _handleError('Erreur de formatage des données');
-      //     }
-      //   },
-      //   onError: (error) {
-      //     _handleError('Erreur connexion classement mois');
-      //   },
-      //   cancelOnError: false,
-      // );
-
         // Classement global (tous les temps)
       _globalSubscription = RankingService.getGlobalRanking(limit: 10).listen(
         (players) {
@@ -651,10 +606,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   else
                     Column(
                       children: [
-                        // _buildRankingSection('Meilleurs joueurs du jour', _dailyRanking, Color(0xFF00d4ff)),
-                        // SizedBox(height: 40),
-                        // _buildRankingSection('Meilleurs joueurs du mois', _monthlyRanking,  Color(0xFFe040fb)),
-                        // SizedBox(height: 40),
                         _buildRankingSection('Meilleurs joueurs de Shikaku', _globalRanking, Color(0xFFFFD700)),
                       ],
                     ),
@@ -724,10 +675,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildLoadingRankings() {
     return Column(
       children: [
-        // _buildRankingSectionShimmer('Meilleurs joueurs du jour', Color(0xFF00d4ff)),
-        // SizedBox(height: 40),
-        // _buildRankingSectionShimmer('Meilleurs joueurs du mois', Color(0xFFe040fb)),
-        // SizedBox(height: 40),
         _buildRankingSectionShimmer('Meilleurs joueurs de Shikaku', Color(0xFFFFD700)),
       ],
     );
@@ -903,14 +850,20 @@ Widget _buildRankingSection(String title, List<Map<String, dynamic>> ranking, Co
                               ),
                             ),
                             child: ClipOval(
-                              child: Image.network(
-                                      player['avatar'],
-                                      fit: BoxFit.cover,
-                                      width: 75,
-                                      height: 75,
-                                      errorBuilder: (context, error, stackTrace) => 
-                                      Icon(Icons.person, size: 30, color: Colors.white),
-                                    ),
+                              child: GestureDetector(
+                              onTap: () {
+                                // Afficher la photo en plein écran
+                                showFullScreenImage(context, player['avatar']);
+                              },
+                                child: Image.network(
+                                        player['avatar'],
+                                        fit: BoxFit.cover,
+                                        width: 75,
+                                        height: 75,
+                                        errorBuilder: (context, error, stackTrace) => 
+                                        Icon(Icons.person, size: 30, color: Colors.white),
+                                      ),
+                              ),
                             ),
                           ),
                           Positioned(

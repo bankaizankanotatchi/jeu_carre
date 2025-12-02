@@ -45,7 +45,7 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
     },
     {
       'title': '⏱️ TIMERS',
-      'description': '15 secondes par coup • 3 minutes par partie totale • 3 tours manqués = défaite automatique • au debut de chaque partie vous pouvez changer ces paramètres sauf pour la pénalité',
+      'description': '15 secondes par coup • 3 minutes par partie totale • 3 tours manqués ou Abandon = défaite automatique • au debut de chaque partie vous pouvez changer ces paramètres sauf pour la pénalité ',
       'illustration': 'timers',
     },
     {
@@ -757,7 +757,7 @@ class _FirstLaunchRulesScreenState extends State<FirstLaunchRulesScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'BIENVENUE DANS SHIKUKA!',
+                            'BIENVENUE DANS SHIKAKU!',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
