@@ -220,6 +220,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _resultModalShown = false;
   bool _isSpectator = false;
   OverlayEntry? _messageOverlayEntry;
+    // SUIVI DES MESSAGES DÉJÀ AFFICHÉS
+  String? _lastDisplayedMessageId;
+  Timer? _messageCleanupTimer;
+  
+  
   
   // 🆕 SUIVI DES TOURS MANQUÉS
   Map<String, int> _consecutiveMissedTurns = {
@@ -385,8 +390,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         if (opponentId != null) {
           _opponentPlayer = await GameService.getPlayer(opponentId);
         }
-        
-        _startListeningToMessages();
 
       } else {
         if (widget.existingGame!.player1Id != null) {
@@ -422,6 +425,9 @@ void _startListeningToGameUpdates() {
     // 🎯 DÉTECTER LES NOUVEAUX POINTS ADVERSES
     final newPoints = game.points;
     final oldPointsCount = points.length;
+
+          // 🔥 NOUVELLE PARTIE : GESTION DES MESSAGES
+      _handleIncomingMessage(game);
     
     setState(() {
       points = game.points;
@@ -489,12 +495,59 @@ void _startListeningToGameUpdates() {
     print('Erreur écoute jeu: $error');
   });
 }
+
+  // 🔥 MÉTHODE POUR GÉRER LES MESSAGES ENTRANTS
+  void _handleIncomingMessage(Game game) {
+    // Vérifier s'il y a un nouveau message
+    if (game.lastQuickMessage == null || game.messageDisplayed == true) {
+      return;
+    }
+
+    final message = game.lastQuickMessage!;
+    final senderId = message['senderId'] as String;
+    final messageText = message['text'] as String;
+    final messageTimestamp = message['timestamp'] as int;
+
+    // Éviter d'afficher son propre message
+    if (senderId == _currentUserId) {
+      // Marquer comme affiché sans l'afficher
+      GameService.markMessageAsDisplayed(_gameId!);
+      return;
+    }
+
+    // Éviter les doublons avec un identifiant unique
+    final messageId = '${senderId}_$messageTimestamp';
+    if (_lastDisplayedMessageId == messageId) {
+      return;
+    }
+
+    // Afficher le message
+    _showMessageOverlay(messageText, senderId: senderId);
+    
+    // Marquer comme affiché dans Firestore
+    GameService.markMessageAsDisplayed(_gameId!);
+    
+    // Enregistrer l'ID pour éviter les doublons
+    _lastDisplayedMessageId = messageId;
+
+    // Nettoyer l'ID après un délai
+    _messageCleanupTimer?.cancel();
+    _messageCleanupTimer = Timer(Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() {
+          _lastDisplayedMessageId = null;
+        });
+      }
+    });
+  } 
+
   @override
   void dispose() {
     _cancelAllTimers();
     _transformationController.dispose();
     _scoreAnimationController.dispose();
     _radarAnimationController.dispose();
+    _messageCleanupTimer?.cancel();
     _gameStreamSubscription?.cancel();
     _messageOverlayEntry?.remove();
     super.dispose();
@@ -2016,7 +2069,7 @@ Widget _buildReflexionTimer() {
   }
 
   void _showQuickMessageModal() {
-    if (!_isOnlineGame || _isSpectator) return;
+    if (!_isOnlineGame) return;
     
     showModalBottomSheet(
       context: context,
@@ -2046,18 +2099,6 @@ Widget _buildReflexionTimer() {
       _currentUserId!,
       _currentUserPlayer?.username ?? 'Joueur'
     );
-  }
-
-  void _startListeningToMessages() {
-    if (_gameId == null) return;
-    
-    GameService.getQuickMessages(_gameId!).listen((message) {
-      if (message.isNotEmpty && 
-          message['senderId'] != _currentUserId && 
-          mounted) {
-        _showMessageOverlay(message['text'], senderId: message['senderId']);
-      }
-    });
   }
 
   void _showMessageOverlay(String message, {required String senderId}) {

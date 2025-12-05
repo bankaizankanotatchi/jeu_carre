@@ -18,7 +18,6 @@ class Game {
   final DateTime updatedAt;
   final DateTime? startedAt;
   final DateTime? finishedAt;
-  final List<String> spectators; // IDs des spectateurs
   final Map<String, dynamic> gameSettings; // Paramètres de partie
   final int timeRemaining;      // Temps restant global
   final Map<String, int> reflexionTimeRemaining; // Temps par joueur
@@ -26,6 +25,10 @@ class Game {
   final String? winnerId;       // ID du gagnant
   final String? endReason; // CHANGEMENT: Utiliser String au lieu de GameEndReason
   final Map<String, int> consecutiveMissedTurns; // Tours manqués consécutifs
+
+  final Map<String, dynamic>? lastQuickMessage;
+  final DateTime? lastMessageTimestamp;
+  final bool messageDisplayed; 
 
   Game({
     required this.id,
@@ -55,11 +58,11 @@ class Game {
     this.winnerId,
     this.endReason, // CHANGEMENT: String au lieu de GameEndReason
     Map<String, int>? consecutiveMissedTurns,
-  }) : spectators = spectators ?? [],
-       gameSettings = gameSettings ?? {
-         'allowSpectators': true,
+    this.lastQuickMessage,
+    this.lastMessageTimestamp,
+    this.messageDisplayed = false,
+  }) : gameSettings = gameSettings ?? {
          'isRanked': false,
-         'maxSpectators': 50,
        },
        reflexionTimeRemaining = reflexionTimeRemaining ?? {},
        moveHistory = moveHistory ?? [],
@@ -86,7 +89,6 @@ class Game {
       'updatedAt': updatedAt.millisecondsSinceEpoch,
       'startedAt': startedAt?.millisecondsSinceEpoch,
       'finishedAt': finishedAt?.millisecondsSinceEpoch,
-      'spectators': spectators,
       'gameSettings': gameSettings,
       'timeRemaining': timeRemaining,
       'reflexionTimeRemaining': reflexionTimeRemaining,
@@ -94,6 +96,9 @@ class Game {
       'winnerId': winnerId,
       'endReason': endReason, // CHANGEMENT: Stocker directement le String
       'consecutiveMissedTurns': consecutiveMissedTurns,
+            'lastQuickMessage': lastQuickMessage,
+      'lastMessageTimestamp': lastMessageTimestamp?.millisecondsSinceEpoch,
+      'messageDisplayed': messageDisplayed,
     };
   }
 
@@ -122,7 +127,6 @@ class Game {
       finishedAt: map['finishedAt'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['finishedAt'])
           : null,
-      spectators: List<String>.from(map['spectators'] ?? []),
       gameSettings: Map<String, dynamic>.from(map['gameSettings'] ?? {}),
       timeRemaining: map['timeRemaining'] ?? 180,
       reflexionTimeRemaining: Map<String, int>.from(map['reflexionTimeRemaining'] ?? {}),
@@ -130,6 +134,13 @@ class Game {
       winnerId: map['winnerId'],
       endReason: map['endReason'], // CHANGEMENT: Lire directement le String
       consecutiveMissedTurns: Map<String, int>.from(map['consecutiveMissedTurns'] ?? {}),
+            lastQuickMessage: map['lastQuickMessage'] != null 
+          ? Map<String, dynamic>.from(map['lastQuickMessage'])
+          : null,
+      lastMessageTimestamp: map['lastMessageTimestamp'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['lastMessageTimestamp'])
+          : null,
+      messageDisplayed: map['messageDisplayed'] ?? false,
     );
   }
 
@@ -147,6 +158,8 @@ class Game {
       return GameStatus.waiting;
     }
   }
+
+
 
   // Méthodes utilitaires existantes...
   Game copyWithConsecutiveMissedTurns(String playerId, int value) {
@@ -172,7 +185,6 @@ class Game {
       updatedAt: updatedAt,
       startedAt: startedAt,
       finishedAt: finishedAt,
-      spectators: spectators,
       gameSettings: gameSettings,
       timeRemaining: timeRemaining,
       reflexionTimeRemaining: reflexionTimeRemaining,
@@ -190,7 +202,60 @@ class Game {
   bool hasPlayerMissedThreeTurns(String playerId) {
     return (consecutiveMissedTurns[playerId] ?? 0) >= 3;
   }
+
+      // Méthode pour ajouter un message
+  Game copyWithMessage({
+    String? text,
+    String? senderId,
+    String? senderName, 
+    bool? messageDisplayed,
+  }) {
+    return Game(
+      id: id,
+      players: players,
+      currentPlayer: currentPlayer,
+      scores: scores,
+      gridSize: gridSize,
+      points: points,
+      squares: squares,
+      status: status,
+      player1Id: player1Id,
+      player2Id: player2Id,
+      isAgainstAI: isAgainstAI,
+      aiDifficulty: aiDifficulty,
+      gameDuration: gameDuration,
+      reflexionTime: reflexionTime,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(), // Mettre à jour la date
+      startedAt: startedAt,
+      finishedAt: finishedAt,
+      gameSettings: gameSettings,
+      timeRemaining: timeRemaining,
+      reflexionTimeRemaining: reflexionTimeRemaining,
+      moveHistory: moveHistory,
+      winnerId: winnerId,
+      endReason: endReason,
+      consecutiveMissedTurns: consecutiveMissedTurns,
+      // NOUVEAUX CHAMPS
+      lastQuickMessage: text != null ? {
+        'text': text,
+        'senderId': senderId,
+        'senderName': senderName,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      } : null,
+      lastMessageTimestamp: DateTime.now(),
+      messageDisplayed: false, // Réinitialiser l'affichage
+    );
+  }
+
+  // Marquer le message comme affiché
+  Game copyWithMessageDisplayed(bool displayed) {
+    return copyWithMessage(
+      messageDisplayed: displayed,
+    );
+  }
 }
+
 
 class GridPoint {
   final int x;
@@ -220,6 +285,8 @@ class GridPoint {
     );
   }
 }
+
+
 
 class Square {
   final int x;

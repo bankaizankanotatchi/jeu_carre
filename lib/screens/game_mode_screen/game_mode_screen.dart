@@ -30,11 +30,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
   late Animation<double> _fadeAnimation;
 
   int _selectedGridSize = 15;
-  int _selectedGameDuration = 180;
+  int _selectedGameDuration = 300;
   int _selectedReflexionTime = 15;
 
   final List<int> _gridSizeOptions = [15, 20, 25, 30];
-  final List<int> _gameDurationOptions = [180, 300, 600, 900];
+  final List<int> _gameDurationOptions = [300, 600, 900, 1200];
   final List<int> _reflexionTimeOptions = [15, 20, 25, 30];
 
   // Variable pour contrôler l'affichage du modal d'envoi
@@ -456,8 +456,6 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
       ),
     );
   }
-
-  // ... (le reste de votre code reste inchangé: _buildSettingCard, _buildOptionChip, etc.)
 
   Widget _buildSettingCard({
     required String title,
