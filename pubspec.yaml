@@ -27,6 +27,8 @@ dependencies:
   firebase_database: ^12.0.3
   minio: ^3.5.8
   mime: ^2.0.0
+  flutter_linkify: ^6.0.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

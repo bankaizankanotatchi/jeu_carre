@@ -20,6 +20,7 @@ class Player {
   final bool isOnline;
   final bool inGame;
   final String? currentGameId;
+  final String? lastProcessedGame;
   
   // NOUVELLE PROPRIÉTÉ : Messages de l'utilisateur
   final List<UserMessage> messages;
@@ -44,6 +45,7 @@ class Player {
     this.inGame = false,
     this.currentGameId,
     List<UserMessage>? messages, // NOUVEAU
+     this.lastProcessedGame, 
   }) : messages = messages ?? [];
 
   // NOUVEAU GETTER : Vérifier si l'utilisateur peut encore envoyer des messages
@@ -93,6 +95,7 @@ class Player {
       'inGame': inGame,
       'currentGameId': currentGameId,
       'messages': messages.map((msg) => msg.toMap()).toList(), // NOUVEAU
+       'lastProcessedGame': lastProcessedGame, 
     };
   }
 
@@ -116,8 +119,10 @@ class Player {
       isOnline: map['isOnline'] ?? false,
       inGame: map['inGame'] ?? false,
       currentGameId: map['currentGameId'],
+       lastProcessedGame: map['lastProcessedGame'],
       messages: List<UserMessage>.from( // NOUVEAU
         (map['messages'] ?? []).map((msgMap) => UserMessage.fromMap(msgMap))
+        
       ),
     );
   }
@@ -139,6 +144,7 @@ class Player {
     int? globalRank,
     DateTime? lastRankUpdate,
     List<UserMessage>? messages, // NOUVEAU
+    String? lastProcessedGame, 
   }) {
     return Player(
       id: this.id,
@@ -157,6 +163,7 @@ class Player {
       stats: stats ?? this.stats,
       isActive: isActive ?? this.isActive,
       messages: messages ?? this.messages, // NOUVEAU
+       lastProcessedGame: lastProcessedGame ?? this.lastProcessedGame, 
     );
   }
 

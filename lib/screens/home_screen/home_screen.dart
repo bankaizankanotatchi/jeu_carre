@@ -194,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 SizedBox(height: 10),
                 Text(
-                  'Version 1.0.0',
+                  'Version 1.0.1',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,

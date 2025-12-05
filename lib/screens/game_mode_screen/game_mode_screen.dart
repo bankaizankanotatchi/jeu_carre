@@ -35,7 +35,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> with SingleTickerProv
 
   final List<int> _gridSizeOptions = [15, 20, 25, 30];
   final List<int> _gameDurationOptions = [180, 300, 600, 900];
-  final List<int> _reflexionTimeOptions = [5, 10, 15, 20];
+  final List<int> _reflexionTimeOptions = [15, 20, 25, 30];
 
   // Variable pour contrôler l'affichage du modal d'envoi
   bool _isSendingRequest = false;

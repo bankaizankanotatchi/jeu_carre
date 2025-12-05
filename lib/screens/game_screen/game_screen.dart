@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/ai_player.dart';
@@ -212,7 +211,7 @@ class __QuickMessageModalState extends State<_QuickMessageModal>
   }
 }
 
-class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   List<GridPoint> points = [];
   List<Square> squares = [];
   String currentPlayer = 'bleu';
@@ -228,15 +227,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
     'rouge': 0
   };
   
-  // Variables pour la gestion des abandons LOCAUX
-  Timer? _localAbandonTimer;
-  int _localAbandonCountdown = 30;
-  bool _hasOpponentConnected = false;
-  bool _initialWaitTimerStarted = false;
-  Timer? _initialWaitTimer;
-  bool _showOpponentDisconnectModal = false;
-  String? _disconnectedPlayerId;
-  
   // Variables existantes
   late AnimationController _radarAnimationController;
   late Animation<double> _radarAnimation;
@@ -247,7 +237,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
   int _timeRemaining = 180;
   double _progressValue = 0.0;
   late Timer _reflexionTimer;
-  int _reflexionTimeRemaining = 15;
   bool _timerInitialized = false;
   TransformationController _transformationController = TransformationController();
   late AnimationController _scoreAnimationController;
@@ -260,6 +249,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
   String? _myPlayerColor;
   bool _isMyTurn = false;
   bool _isOnlineGame = false;
+  int _reflexionTimeRemaining = 0; // Initialisé à 0, sera défini dans _initializeGame()
 
   String get _bluePlayerName {
     String name;
@@ -304,9 +294,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
     _initializeGameData();
     _initializeGame();
     _checkUserStatus();
-
-    // Ajouter l'observateur du cycle de vie
-    WidgetsBinding.instance.addObserver(this);
     
     _scoreAnimationController = AnimationController(
       vsync: this,
@@ -333,6 +320,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeTimers();
       _centerZoom();
+
+      // Démarrer la vérification de statut pour les parties en ligne
+      if (_isOnlineGame && _gameId != null) {
+        // Vérifier immédiatement si l'adversaire est en ligne
+        Future.delayed(Duration(seconds: 3), () {
+          if (mounted) {
+            _checkOpponentOnlineStatus();
+          }
+        });
+      }
       
       if (widget.isAgainstAI) {
         aiPlayerId = 'rouge';
@@ -390,12 +387,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
         }
         
         _startListeningToMessages();
-        
-        // 🔥 DÉMARRER LE TIMER INITIAL DE 10 SECONDES
-        if (!_initialWaitTimerStarted) {
-          _startInitialWaitTimer();
-        }
-        
+
       } else {
         if (widget.existingGame!.player1Id != null) {
           _currentUserPlayer = await GameService.getPlayer(widget.existingGame!.player1Id!);
@@ -421,750 +413,88 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin, 
     _timerInitialized = true;
   }
 
-  // 🔥 NOUVELLE MÉTHODE : Timer initial de 10 secondes
-  void _startInitialWaitTimer() {
-    if (!_isOnlineGame || _isSpectator || _initialWaitTimerStarted) return;
-    
-    _initialWaitTimerStarted = true;
-    
-    print('⏱️ Démarrage timer initial (30s) pour vérifier adversaire');
-    
-    _initialWaitTimer = Timer(Duration(seconds: 30), () {
-      if (mounted && _isOnlineGame && !_hasOpponentConnected && !isGameFinished) {
-        print('🏁 Adversaire n\'a pas rejoint après 30s - Victoire');
-        _handleInitialNoShow();
-      }
-    });
-  }
-
-
-
-Future<void> _endGameByOpponentAbsence() async {
-  if (!_isOnlineGame || _gameId == null || isGameFinished) return;
+void _startListeningToGameUpdates() {
+  if (_gameId == null) return;
   
-  final winner = _myPlayerColor == 'bleu' ? 'bleu' : 'rouge';
-  final loser = winner == 'bleu' ? 'rouge' : 'bleu';
-  
-  final winnerId = _currentUserId!;
-  final opponentId = _myPlayerColor == 'bleu' 
-      ? widget.existingGame!.player2Id 
-      : widget.existingGame!.player1Id;
-  
-  if (opponentId != null) {
-    try {
-      // 🔥 TRANSFERT DES POINTS : vous récupérez les points de l'adversaire + 1 point bonus
-      final updatedScores = {
-        winnerId: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
-        opponentId: 0
+  _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
+    if (game == null || !mounted) return;
+    
+    // 🎯 DÉTECTER LES NOUVEAUX POINTS ADVERSES
+    final newPoints = game.points;
+    final oldPointsCount = points.length;
+    
+    setState(() {
+      points = game.points;
+      squares = game.squares;
+      
+      scores = {
+        'bleu': game.scores[game.player1Id] ?? 0,
+        'rouge': game.scores[game.player2Id] ?? 0,
       };
       
-      // Mettre à jour les scores d'abord
-      await GameService.updateGameScores(_gameId!, updatedScores);
+      if (game.currentPlayer == game.player1Id) {
+        currentPlayer = 'bleu';
+      } else if (game.currentPlayer == game.player2Id) {
+        currentPlayer = 'rouge';
+      }
       
-      // Puis terminer la partie
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-    } catch (e) {
-      print('❌ Erreur victoire par absence: $e');
-      // Fallback: terminer sans transfert de points
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-    }
-  }
-}
-  void _startListeningToGameUpdates() {
-    if (_gameId == null) return;
-    
-    _gameStreamSubscription = GameService.getGameById(_gameId!).listen((game) {
-      if (game == null || !mounted) return;
+      _isMyTurn = (currentPlayer == _myPlayerColor);
+      _timeRemaining = game.timeRemaining;
+      _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
       
-      // 🎯 DÉTECTER LES NOUVEAUX POINTS ADVERSES
-      final newPoints = game.points;
-      final oldPointsCount = points.length;
-      
-      setState(() {
-        points = game.points;
-        squares = game.squares;
+      // 🔥 MISE À JOUR DU TEMPS DE RÉFLEXION DEPUIS FIRESTORE
+      if (game.reflexionTimeRemaining != null) {
+        final currentPlayerId = currentPlayer == 'bleu' 
+            ? widget.existingGame!.player1Id! 
+            : widget.existingGame!.player2Id!;
         
-        scores = {
-          'bleu': game.scores[game.player1Id] ?? 0,
-          'rouge': game.scores[game.player2Id] ?? 0,
-        };
-        
-        if (game.currentPlayer == game.player1Id) {
-          currentPlayer = 'bleu';
-        } else if (game.currentPlayer == game.player2Id) {
-          currentPlayer = 'rouge';
-        }
-        
-        _isMyTurn = (currentPlayer == _myPlayerColor);
-        _timeRemaining = game.timeRemaining;
-        _progressValue = 1.0 - (_timeRemaining / widget.gameDuration);
-        
-        // 🔥 DÉTECTION DU NOUVEAU POINT ADVERSÉ
-        if (newPoints.length > oldPointsCount && oldPointsCount > 0) {
-          final newPoint = newPoints.last;
-          
-          final isOpponentMove = (_myPlayerColor == 'bleu' && newPoint.playerId == widget.existingGame!.player2Id) ||
-                                (_myPlayerColor == 'rouge' && newPoint.playerId == widget.existingGame!.player1Id);
-          
-          if (isOpponentMove) {
-            _startRadarAnimation(newPoint);
-          }
-        }
-        
-        if (game.reflexionTimeRemaining != null) {
-          final currentPlayerId = currentPlayer == 'bleu' 
-              ? widget.existingGame!.player1Id! 
-              : widget.existingGame!.player2Id!;
-          
-          final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
-          if (reflexionTime != null && reflexionTime != _reflexionTimeRemaining) {
+        final reflexionTime = game.reflexionTimeRemaining![currentPlayerId];
+        if (reflexionTime != null) {
+          // 🎯 IMPORTANT: Synchroniser le temps local avec Firestore
+          if (_reflexionTimeRemaining != reflexionTime) {
+            print('🔄 Synchronisation temps réflexion: $_reflexionTimeRemaining → $reflexionTime');
             _reflexionTimeRemaining = reflexionTime;
           }
         }
-        
-        final wasGameFinished = isGameFinished;
-        isGameFinished = game.status == GameStatus.finished;
-        
-        if (isGameFinished && !wasGameFinished) {
-          _cancelAllTimers();
-          _cancelLocalAbandonTimer();
-          _initialWaitTimer?.cancel();
-          
-          if (!_resultModalShown) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_resultModalShown) {
-                _showResultModal();
-              }
-            });
-          }
-        }
-      });
+      }
       
-      // 🔥 DÉTECTION DE LA CONNEXION/DÉCONNEXION DE L'ADVERSAIRE
-      if (_isOnlineGame && !_isSpectator && !isGameFinished) {
-        final opponentId = _myPlayerColor == 'bleu' 
-            ? game.player2Id 
-            : game.player1Id;
+      // 🔥 DÉTECTION DU NOUVEAU POINT ADVERSÉ
+      if (newPoints.length > oldPointsCount && oldPointsCount > 0) {
+        final newPoint = newPoints.last;
         
-        if (opponentId != null) {
-          // Vérifier si l'adversaire a joué au moins un coup
-          final hasOpponentPlayed = game.points.any((p) => p.playerId == opponentId);
-          
-          if (hasOpponentPlayed && !_hasOpponentConnected) {
-            _hasOpponentConnected = true;
-            _initialWaitTimer?.cancel();
-            print('✅ Adversaire connecté détecté (a joué un coup)');
-          }
-          
-          // 🔥 DÉTECTION DÉCONNEXION : Vérifier le temps depuis le dernier coup
-          if (_hasOpponentConnected) {
-            final opponentMoves = game.points.where((p) => p.playerId == opponentId).toList();
-            
-            if (opponentMoves.isNotEmpty) {
-              final lastOpponentMove = opponentMoves.last;
-              final moveTime = DateTime.fromMillisecondsSinceEpoch(lastOpponentMove.timestamp);
-              final now = DateTime.now();
-              final secondsSinceLastMove = now.difference(moveTime).inSeconds;
-              
-              // Vérifier si c'est le tour de l'adversaire
-              final isOpponentTurn = (opponentId == game.player2Id && currentPlayer == 'rouge') ||
-                                    (opponentId == game.player1Id && currentPlayer == 'bleu');
-              
-              // Si l'adversaire n'a pas joué depuis 20+ secondes ET c'est son tour
-              if (isOpponentTurn && secondsSinceLastMove > 20 && _disconnectedPlayerId == null) {
-                print('⚠️ Adversaire inactif (pas de coup depuis ${secondsSinceLastMove}s)');
-                _showOpponentDisconnectWarning(opponentId);
-              } else if (secondsSinceLastMove <= 20 && _disconnectedPlayerId == opponentId) {
-                // L'adversaire a rejoué
-                print('✅ Adversaire redevenu actif');
-                _cancelOpponentDisconnectTimer();
-              }
-            }
-          }
+        final isOpponentMove = (_myPlayerColor == 'bleu' && newPoint.playerId == widget.existingGame!.player2Id) ||
+                              (_myPlayerColor == 'rouge' && newPoint.playerId == widget.existingGame!.player1Id);
+        
+        if (isOpponentMove) {
+          _startRadarAnimation(newPoint);
         }
       }
-    }, onError: (error) {
-      print('Erreur écoute jeu: $error');
-    });
-  }
-
-// 🔥 REMPLACER _showInitialNoShowModal par cette version stylisée
-void _handleInitialNoShow() {
-  if (!_isOnlineGame || _isSpectator || isGameFinished || _hasOpponentConnected) return;
-  
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withOpacity(0.85),
-    barrierDismissible: false,
-    builder: (context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.all(20),
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF2d0052), Color(0xFF1a0033)],
-            ),
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: Color(0xFF9c27b0), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0xFF9c27b0).withOpacity(0.5),
-                blurRadius: 30,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Icône d'avertissement
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Color(0xFFFFA000).withOpacity(0.8),
-                      Color(0xFFFF6F00).withOpacity(0.3),
-                    ],
-                  ),
-                  border: Border.all(color: Color(0xFFFFA000), width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0xFFFFA000).withOpacity(0.5),
-                      blurRadius: 15,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.warning_rounded,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
-              SizedBox(height: 20),
-              
-              // Titre
-              Text(
-                'VICTOIRE PAR FORFAIT',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              SizedBox(height: 15),
-              
-              // Message
-              Text(
-                'Votre adversaire n\'a pas rejoint la partie depuis 30 secondes.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  height: 1.5,
-                ),
-              ),
-              SizedBox(height: 10),
-              
-              // Points bonus
-              Container(
-                margin: EdgeInsets.symmetric(vertical: 15),
-                padding: EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Color(0xFF2d0052).withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Color(0xFF00d4ff), width: 1),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.star, color: Color(0xFF00d4ff), size: 24),
-                    SizedBox(width: 10),
-                    Text(
-                      '+1 point bonus pour victoire rapide',
-                      style: TextStyle(
-                        color: Color(0xFF00d4ff),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              SizedBox(height: 20),
-              
-              // Bouton OK
-              Container(
-                width: double.infinity,
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF9c27b0), Color(0xFF7b1fa2)],
-                  ),
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0xFF9c27b0).withOpacity(0.5),
-                      blurRadius: 20,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(15),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      await _endGameByOpponentAbsence();
-                    },
-                    child: Center(
-                      child: Text(
-                        'Fermer',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
-// 🔥 REMPLACER _showOpponentDisconnectWarning par cette version stylisée
-void _showOpponentDisconnectWarning(String opponentId) {
-  if (_showOpponentDisconnectModal) return;
-  
-  _showOpponentDisconnectModal = true;
-  _disconnectedPlayerId = opponentId;
-  _localAbandonCountdown = 30;
-  
-  print('⚠️ Affichage modal déconnexion adversaire');
-  
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withOpacity(0.85),
-    barrierDismissible: false,
-    builder: (context) {
-      Timer? modalTimer;
       
-      // Démarrer le timer du modal
-      modalTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        if (!mounted || !_isOnlineGame || isGameFinished) {
-          timer.cancel();
-          return;
-        }
+      final wasGameFinished = isGameFinished;
+      isGameFinished = game.status == GameStatus.finished;
+      
+      if (isGameFinished && !wasGameFinished) {
+        _cancelAllTimers();
         
-        if (_localAbandonCountdown > 0) {
-          _localAbandonCountdown--;
-          // Forcer le rafraîchissement
-          (context as Element).markNeedsBuild();
-        } else {
-          timer.cancel();
-          _handleOpponentAbandon(opponentId);
+        if (!_resultModalShown) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_resultModalShown) {
+              _showResultModal();
+            }
+          });
         }
-      });
-      
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.all(20),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF2d0052), Color(0xFF1a0033)],
-                ),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Color(0xFF9c27b0), width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0xFF9c27b0).withOpacity(0.5),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Icône
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          Color(0xFFFFA000).withOpacity(0.8),
-                          Color(0xFFFF6F00).withOpacity(0.3),
-                        ],
-                      ),
-                      border: Border.all(color: Color(0xFFFFA000), width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFFFFA000).withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 3,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.timer_rounded,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  
-                  // Titre
-                  Text(
-                    'ADVERSAIRE INACTIF',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  
-                  // Compte à rebours
-                  Container(
-                    padding: EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF1a0033),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Color(0xFFff006e), width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFFff006e).withOpacity(0.3),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'TEMPS RESTANT',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        
-                        // Nombre en grand
-                        Text(
-                          '$_localAbandonCountdown',
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFff006e),
-                            letterSpacing: 2,
-                            shadows: [
-                              Shadow(
-                                color: Color(0xFFff006e).withOpacity(0.5),
-                                blurRadius: 10,
-                                offset: Offset(0, 0),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        
-                        Text(
-                          'secondes',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 15),
-                  
-                  // Message d'information
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF2d0052).withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Color(0xFF4a0080), width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Color(0xFF00d4ff), size: 20),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Si votre adversaire ne revient pas dans le délai, vous gagnerez la partie et récupérerez ses points + 1 point bonus.',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  SizedBox(height: 12),
-                  
-                  // Boutons
-              Container(
-                          height: 50,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: Color(0xFF9c27b0), width: 2),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                              },
-                              child: Center(
-                                child: Text(
-                                  'Fermer',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                    
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  ).then((_) {
-    _showOpponentDisconnectModal = false;
+      }
+    });
+  }, onError: (error) {
+    print('Erreur écoute jeu: $error');
   });
 }
-
-  void _cancelOpponentDisconnectTimer() {
-    _disconnectedPlayerId = null;
-    _showOpponentDisconnectModal = false;
-  }
-
-void _handleOpponentAbandon(String opponentId) async {
-  if (!_isOnlineGame || _gameId == null || isGameFinished || _isSpectator) return;
-  
-  print('🏁 Victoire par abandon de l\'adversaire (inactif >30s)');
-  
-  final winner = _myPlayerColor == 'bleu' ? 'bleu' : 'rouge';
-  final loser = winner == 'bleu' ? 'rouge' : 'bleu';
-  
-  final winnerId = _currentUserId!;
-  final loserId = opponentId;
-  
-  try {
-    // 🔥 TRANSFERT DES POINTS : vous récupérez les points de l'adversaire + 1 point bonus
-    final updatedScores = {
-      winnerId: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
-      loserId: 0
-    };
-    
-    // Mettre à jour les scores d'abord
-    await GameService.updateGameScores(_gameId!, updatedScores);
-    
-    // Puis terminer la partie
-    await GameService.finishGameWithReason(
-      _gameId!,
-      winnerId: winnerId,
-      endReason: GameEndReason.playerSurrendered
-    );
-  } catch (e) {
-    print('❌ Erreur victoire abandon: $e');
-    // Fallback: terminer sans transfert de points
-    await GameService.finishGameWithReason(
-      _gameId!,
-      winnerId: winnerId,
-      endReason: GameEndReason.playerSurrendered
-    );
-  }
-}
-  // 🔥 MODIFIER didChangeAppLifecycleState pour utiliser uniquement des timers LOCAUX
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_isOnlineGame || _isSpectator || isGameFinished) return;
-    
-    print('📱 État application: $state');
-    
-    if (state == AppLifecycleState.paused || 
-        state == AppLifecycleState.detached ||
-        state == AppLifecycleState.inactive) {
-      
-      print('📱 Application en arrière-plan - Timer abandon local démarré');
-      
-      _startLocalAbandonTimerForCurrentPlayer();
-      
-    } else if (state == AppLifecycleState.resumed) {
-      print('📱 Application revenue en avant-plan');
-      
-      _cancelLocalAbandonTimer();
-    }
-  }
-
-  // 🔥 NOUVELLE MÉTHODE : Timer d'abandon local pour le joueur actuel
-  void _startLocalAbandonTimerForCurrentPlayer() {
-    if (_localAbandonTimer != null && _localAbandonTimer!.isActive) {
-      _localAbandonTimer!.cancel();
-    }
-    
-    _localAbandonCountdown = 30;
-    
-    print('⏱️ Démarrage timer abandon local: 30 secondes');
-    
-    _localAbandonTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (!mounted || !_isOnlineGame || isGameFinished) {
-        timer.cancel();
-        return;
-      }
-      
-      _localAbandonCountdown--;
-      print('⏱️ Décompte abandon local: $_localAbandonCountdown secondes');
-      
-      if (_localAbandonCountdown <= 0) {
-        timer.cancel();
-        print('🏁 Abandon détecté après 30 secondes de déconnexion');
-        _handleLocalPlayerAbandon();
-      }
-    });
-  }
-
-  void _cancelLocalAbandonTimer() {
-    _localAbandonTimer?.cancel();
-    _localAbandonTimer = null;
-    _localAbandonCountdown = 30;
-  }
-
-void _handleLocalPlayerAbandon() async {
-  if (!_isOnlineGame || _gameId == null || isGameFinished || _isSpectator) {
-    return;
-  }
-  
-  print('🏁 Abandon local détecté - Déclencher abandon Firestore');
-  
-  final loser = currentPlayer;
-  final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-  
-  final winnerId = _myPlayerColor == 'bleu' 
-      ? widget.existingGame!.player2Id 
-      : widget.existingGame!.player1Id;
-  final loserId = _myPlayerColor == 'bleu' 
-      ? widget.existingGame!.player1Id 
-      : widget.existingGame!.player2Id;
-  
-  if (winnerId != null && loserId != null) {
-    try {
-      // 🔥 TRANSFERT DES POINTS : gagnant récupère les points du perdant + 1 point bonus
-      final updatedScores = {
-        winnerId: (scores[winner] ?? 0) + (scores[loser] ?? 0) + 1,
-        loserId: 0
-      };
-      
-      // Mettre à jour les scores d'abord
-      await GameService.updateGameScores(_gameId!, updatedScores);
-      
-      // Puis terminer la partie
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-    } catch (e) {
-      print('❌ Erreur abandon: $e');
-      // Fallback: terminer sans transfert de points
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.playerSurrendered
-      );
-    }
-  }
-}
-  void _handleMissedTurnFromFirestore(String playerId, Map<String, dynamic> firestoreGame) {
-    if (!_isOnlineGame || _gameId == null || isGameFinished) return;
-
-    print('🔄🚨 TOUR MANQUÉ pour $playerId');
-
-    final serverTurns = Map<String, int>.from(
-      firestoreGame['consecutiveMissedTurns'] ?? {}
-    );
-
-    final current = serverTurns[playerId] ?? 0;
-    final newValue = current + 1;
-
-    print("📊 FIRESTORE: $current → $newValue");
-
-    serverTurns[playerId] = newValue;
-
-    print('📡 Envoi Firestore: $serverTurns');
-
-    GameService.updateConsecutiveMissedTurns(_gameId!, serverTurns);
-
-    _switchPlayer();
-  }
-
   @override
   void dispose() {
     _cancelAllTimers();
-    _cancelLocalAbandonTimer();
-    _initialWaitTimer?.cancel();
     _transformationController.dispose();
     _scoreAnimationController.dispose();
     _radarAnimationController.dispose();
-    WidgetsBinding.instance.removeObserver(this);
     _gameStreamSubscription?.cancel();
     _messageOverlayEntry?.remove();
     super.dispose();
@@ -1287,147 +617,195 @@ void _handleLocalPlayerAbandon() async {
     });
   }
 
-  void _startReflexionTimer() {
-    _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      if (_isOnlineGame && _isMyTurn) {
-        if (_reflexionTimeRemaining > 0) {
-          setState(() => _reflexionTimeRemaining--);
-          
-          if (_gameId != null && _currentUserId != null) {
-            GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, _reflexionTimeRemaining);
-          }
-        } else {
-          FirebaseFirestore.instance
-          .collection("games")
-          .doc(_gameId)
-          .get()
-          .then((doc) {
-            if (!doc.exists) return;
-
-            final data = doc.data()!;
-            _handleMissedTurnFromFirestore(_currentUserId!, data);
-          });
-        }
-      } else if (!_isOnlineGame) {
-        if (_reflexionTimeRemaining > 0) {
-          setState(() => _reflexionTimeRemaining--);
-        } else {
-          print('⏱️ Temps réflexion écoulé (local)');
-          _handleMissedTurn();
-          _resetReflexionTimer();
-        }
-      }
-    });
-  }
-
-  void _handleMissedTurn() {
-    if (_isOnlineGame && _gameId != null && _currentUserId != null) {
-      FirebaseFirestore.instance
-      .collection("games")
-      .doc(_gameId)
-      .get()
-      .then((doc) {
-        if (!doc.exists) return;
-
-        final data = doc.data()!;
-        _handleMissedTurnFromFirestore(_currentUserId!, data);
-      });
-
-    } else {
-      final currentMissedTurns = _consecutiveMissedTurns[currentPlayer] ?? 0;
-      final newMissedTurns = currentMissedTurns + 1;
-      
-      print('🔄 Tour manqué: $currentPlayer - $newMissedTurns/3');
-      
-      setState(() {
-        _consecutiveMissedTurns[currentPlayer] = newMissedTurns;
-      });
-      
-      if (newMissedTurns >= 3) {
-        print('🏁 3 tours manqués - Fin de partie pour: $currentPlayer');
-        _endGameByMissedTurns(currentPlayer);
-        return;
-      }
-      
-      _switchPlayer();
+void _startReflexionTimer() {
+  _reflexionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+    if (!mounted || isGameFinished) {
+      timer.cancel();
+      return;
     }
-  }
 
-  void _endGameByMissedTurns(String playerWhoMissed) async {
-    print('🏁 Fin de partie par tours manqués: $playerWhoMissed');
-    
-    if (_isOnlineGame && _gameId != null) {
-      final winnerId = playerWhoMissed == widget.existingGame!.player1Id 
-          ? widget.existingGame!.player2Id 
-          : widget.existingGame!.player1Id;
-      
-      await GameService.finishGameWithReason(
-        _gameId!,
-        winnerId: winnerId,
-        endReason: GameEndReason.consecutiveMissedTurns
-      );
-    } else {
-      setState(() {
-        isGameFinished = true;
-        _cancelAllTimers();
-        final loser = playerWhoMissed;
-        final winner = playerWhoMissed == 'bleu' ? 'rouge' : 'bleu';
-        final lostPoints = scores[loser] ?? 0;
-        scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
-        scores[loser] = 0;
-      });
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_resultModalShown) {
-          _showResultModal();
-        }
-      });
-    }
-    GameStartService().exitGame();
-  }
-
-  void _resetReflexionTimer() {
-    _reflexionTimer.cancel();
-    
-    if (_isOnlineGame) {
-      if (_gameId != null && _currentUserId != null && _isMyTurn) {
-        setState(() => _reflexionTimeRemaining = widget.reflexionTime);
-        GameService.updateReflexionTimeAtomic(_gameId!, _currentUserId!, widget.reflexionTime);
-      }
-      _startReflexionTimer();
-    } else {
-      setState(() => _reflexionTimeRemaining = widget.reflexionTime);
-      _startReflexionTimer();
-    }
-  }
-
-  void _switchPlayer() {
-    if (_isOnlineGame) {
-      if (_gameId != null && widget.existingGame != null) {
-        final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-        final nextPlayerId = nextPlayer == 'bleu' 
+    // Décrémentation globale du temps de réflexion
+    if (_reflexionTimeRemaining > 0) {
+      setState(() => _reflexionTimeRemaining--);
+      // Mise à jour Firestore pour les parties en ligne
+      if (_isOnlineGame && _gameId != null && _currentUserId != null) {
+        final currentPlayerId = currentPlayer == 'bleu' 
             ? widget.existingGame!.player1Id! 
             : widget.existingGame!.player2Id!;
         
-        GameService.switchPlayer(_gameId!, nextPlayerId, widget.reflexionTime);
+        GameService.updateReflexionTimeAtomic(
+          _gameId!, 
+          currentPlayerId, 
+          _reflexionTimeRemaining
+        );
       }
     } else {
-      setState(() {
-        currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
-        _reflexionTimeRemaining = widget.reflexionTime;
-      });
       
-      if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
-        _startAITurn();
-      }
+        print('⏱️ Temps réflexion écoulé hors-ligne pour $currentPlayer');
+        _handleMissedTurn();
+   
     }
+  });
+}
+// Vérifie si l'adversaire est en ligne
+void _checkOpponentOnlineStatus() async {
+  if (!mounted || isGameFinished || !_isOnlineGame || _gameId == null || !_isMyTurn) {
+    return;
   }
 
+  try {
+    // Récupérer l'ID de l'adversaire
+    final opponentId = _myPlayerColor == 'bleu' 
+        ? widget.existingGame!.player2Id 
+        : widget.existingGame!.player1Id;
+    
+    if (opponentId != null) {
+      final opponent = await GameService.getPlayer(opponentId);
+      
+      // Vérifier si l'adversaire est en ligne (propriété isOnline du modèle Player)
+      if (opponent != null && !opponent.isOnline) {
+        print('📶 Adversaire déconnecté: ${opponent.username} (${opponent.id})');
+        
+        // Attendre 3 secondes pour confirmer
+        await Future.delayed(Duration(seconds: 3));
+        
+        // Vérifier à nouveau
+        final opponentRecheck = await GameService.getPlayer(opponentId);
+        
+        if (opponentRecheck != null && !opponentRecheck.isOnline) {
+          print('🏁 Adversaire toujours déconnecté après 3s - Abandon automatique');
+          _endGameByForfeit(); // Considéré comme un abandon
+        }
+      }
+    }
+  } catch (e) {
+    print('❌ Erreur vérification statut en ligne: $e');
+  }
+}
+void _handleMissedTurn() {
+  
+  // Seulement pour les parties hors-ligne / IA
+  final currentMissedTurns = _consecutiveMissedTurns[currentPlayer] ?? 0;
+  final newMissedTurns = currentMissedTurns + 1;
+  
+  print('🔄 Tour manqué hors-ligne: $currentPlayer - $newMissedTurns/3');
+  
+  setState(() {
+    _consecutiveMissedTurns[currentPlayer] = newMissedTurns;
+  });
+  
+  if (newMissedTurns >= 3) {
+    if (_isOnlineGame) {
+      _endGameByForfeit();
+    }else{
+    print('🏁 3 tours manqués - Fin de partie hors-ligne pour: $currentPlayer');
+    _endGameByMissedTurns(currentPlayer);
+    return;}
+  }
+  
+  _switchPlayer();
+}
+
+void _endGameByMissedTurns(String playerWhoMissed) async {
+  print('🏁 Fin de partie par tours manqués: $playerWhoMissed');
+  
+  if (_isOnlineGame && _gameId != null) {
+    // 🎯 NE DEVRAIT JAMAIS ARRIVER - L'AUTO-PLAY L'EMPÊCHE
+    print('⚠️ Fin de partie par tours manqués en ligne - Cas inattendu');
+    
+    final winnerId = playerWhoMissed == widget.existingGame!.player1Id 
+        ? widget.existingGame!.player2Id 
+        : widget.existingGame!.player1Id;
+    
+    await GameService.finishGameWithReason(
+      _gameId!,
+      winnerId: winnerId,
+      endReason: GameEndReason.consecutiveMissedTurns
+    );
+  } else {
+    // Logique pour les parties hors-ligne
+    setState(() {
+      isGameFinished = true;
+      _cancelAllTimers();
+      final loser = playerWhoMissed;
+      final winner = playerWhoMissed == 'bleu' ? 'rouge' : 'bleu';
+      final lostPoints = scores[loser] ?? 0;
+      scores[winner] = (scores[winner] ?? 0) + lostPoints + 1;
+      scores[loser] = 0;
+    });
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_resultModalShown) {
+        _showResultModal();
+      }
+    });
+  }
+  GameStartService().exitGame();
+}
+
+void _resetReflexionTimer() {
+  _reflexionTimer.cancel();
+  
+  if (_isOnlineGame) {
+    // Pour les parties en ligne, le temps est géré par Firestore
+    // On récupère le temps depuis le listener
+    // On ne réinitialise pas localement car ça viendra de Firestore
+    _startReflexionTimer();
+  } else {
+    // Pour les parties hors-ligne
+    setState(() {
+      _reflexionTimeRemaining = widget.reflexionTime;
+    });
+    _startReflexionTimer();
+  }
+}
+
+void _switchPlayer() {
+  // Arrêter le timer actuel
+  _reflexionTimer.cancel();
+  
+  if (_isOnlineGame) {
+    if (_gameId != null && widget.existingGame != null) {
+      final nextPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+      final nextPlayerId = nextPlayer == 'bleu' 
+          ? widget.existingGame!.player1Id! 
+          : widget.existingGame!.player2Id!;
+      
+      // 🎯 TEMPS RÉDUIT DE 1 SECONDE POUR LES PARTIES EN LIGNE
+      final reflexionTime = widget.reflexionTime - 1;
+      
+      GameService.switchPlayer(_gameId!, nextPlayerId, reflexionTime);
+      
+      // 🎯 NE PAS RÉINITIALISER LE TEMPS LOCALEMENT
+      // Il viendra de Firestore via le listener
+      setState(() {
+        currentPlayer = nextPlayer;
+      });
+      
+      _startReflexionTimer(); // Redémarrer le timer
+        // Vérifier si l'adversaire est en ligne après le switch
+      if (_isMyTurn) {
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            _checkOpponentOnlineStatus();
+          }
+        });
+      }
+    }
+    
+  } else {
+    setState(() {
+      currentPlayer = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
+      _reflexionTimeRemaining = widget.reflexionTime; // Temps normal pour IA
+    });
+    
+    _startReflexionTimer(); // Redémarrer le timer
+    
+    if (widget.isAgainstAI && currentPlayer == aiPlayerId) {
+      _startAITurn();
+    }
+  }
+}
   void _endGameByTime() async {
     
     if (_isOnlineGame && _gameId != null) {
@@ -1456,16 +834,6 @@ void _handleLocalPlayerAbandon() async {
   }
 
   void _onPointTap(int x, int y) async {
-    if (_isSpectator) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Les spectateurs ne peuvent pas jouer'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
     if (isGameFinished) return;
     
     if (_isOnlineGame && !_isMyTurn || isAITurn) {
@@ -1488,6 +856,10 @@ void _handleLocalPlayerAbandon() async {
     
     if (_isOnlineGame && _gameId != null) {
       try {
+              // pour éviter les doublons en cas de latence
+      if (points.any((point) => point.x == x && point.y == y)) {
+        return;
+      }
         await GameService.addPointToGame(_gameId!, newPoint);
         
         final allPoints = [...points, newPoint];
@@ -1506,6 +878,15 @@ void _handleLocalPlayerAbandon() async {
         } else {
           _startRadarAnimation(newPoint);
         }
+
+              // 🔥 VÉRIFIER SI L'ADVERSAIRE EST ENCORE EN LIGNE APRÈS VOTRE COUP
+      if (_isOnlineGame) {
+        Future.delayed(Duration(seconds: 1), () {
+          if (mounted) {
+            _checkOpponentOnlineStatus();
+          }
+        });
+      }
         
       } catch (e) {
         print('Erreur jouer coup: $e');
@@ -1561,8 +942,6 @@ void _handleLocalPlayerAbandon() async {
     _resultModalShown = true;
     
     _cancelAllTimers();
-    _cancelLocalAbandonTimer();
-    _initialWaitTimer?.cancel();
     
     Future.delayed(Duration(milliseconds: 500), () {
       if (!mounted) return;
@@ -1578,27 +957,27 @@ void _handleLocalPlayerAbandon() async {
     });
   }
 
-  Widget _buildReflexionTimer() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 1, vertical: 2),
-      child: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: Text(
-              '$_reflexionTimeRemaining',
-              style: TextStyle(
-                color: _getPlayerColor(currentPlayer),
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-              ),
+Widget _buildReflexionTimer() {
+  return Container(
+    margin: EdgeInsets.symmetric(horizontal: 1, vertical: 2),
+    child: Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Text(
+            '$_reflexionTimeRemaining', // Affiche le temps restant global
+            style: TextStyle(
+              color: _getPlayerColor(currentPlayer),
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
             ),
-          )
-        ],
-      )
-    );
-  }
+          ),
+        )
+      ],
+    )
+  );
+}
 
   Widget _buildResultModal() {
     final isDraw = scores['bleu']! == scores['rouge']!;
@@ -2099,6 +1478,7 @@ void _handleLocalPlayerAbandon() async {
                   ),
                 ),
               SizedBox(width: 8),
+              if(!_isOnlineGame)
               _buildGameMenuDropdown(),
             ],
           ),
@@ -2171,7 +1551,7 @@ void _handleLocalPlayerAbandon() async {
                 ],
               ),
             ),
-          if (!_isSpectator)
+           if (!_isOnlineGame && !_isSpectator)
             PopupMenuItem<String>(
               value: 'forfeit',
               child: Row(
@@ -2281,10 +1661,10 @@ void _handleLocalPlayerAbandon() async {
     final winner = currentPlayer == 'bleu' ? 'rouge' : 'bleu';
     
     if (_isOnlineGame && _gameId != null) {
-      final winnerId = _myPlayerColor == 'bleu' 
+      final loserId= _myPlayerColor == 'bleu' 
           ? widget.existingGame!.player2Id 
           : widget.existingGame!.player1Id;
-      final loserId = _myPlayerColor == 'bleu' 
+      final  winnerId = _myPlayerColor == 'bleu' 
           ? widget.existingGame!.player1Id 
           : widget.existingGame!.player2Id;
       

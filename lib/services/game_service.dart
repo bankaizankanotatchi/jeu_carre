@@ -1,11 +1,14 @@
+import 'dart:async';
+import 'dart:math' as math show Random;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/models/game_request.dart';
-import 'package:jeu_carre/models/game_result.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/services/ranking_service.dart';
+import 'package:jeu_carre/utils/game_logic.dart';
 
 class GameService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -15,9 +18,7 @@ class GameService {
   static CollectionReference get gamesCollection => _firestore.collection('games');
   static CollectionReference get usersCollection => _firestore.collection('users');
   static CollectionReference get matchRequestsCollection => _firestore.collection('match_requests');
-  static CollectionReference get gameResultsCollection => _firestore.collection('game_results');
   static CollectionReference get notificationsCollection => _firestore.collection('notifications');
-  static CollectionReference get spectatorsCollection => _firestore.collection('spectators');
 
   // ============================================================
   // GESTION DES PARTIES - AMÉLIORATIONS
@@ -137,18 +138,19 @@ class GameService {
   // ============================================================
   
 
-  /// Mettre à jour le temps de réflexion de manière atomique
-  static Future<void> updateReflexionTimeAtomic(String gameId, String playerId, int newTime) async {
-    try {
-      await gamesCollection.doc(gameId).update({
-        'reflexionTimeRemaining.$playerId': newTime,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-    } catch (e) {
-      print('Erreur mise à jour temps réflexion atomique: $e');
-    }
-  }
 
+/// Mettre à jour le temps de réflexion de manière atomique
+static Future<void> updateReflexionTimeAtomic(String gameId, String playerId, int newTime) async {
+  try {
+    
+    await gamesCollection.doc(gameId).update({
+      'reflexionTimeRemaining.$playerId': newTime,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  } catch (e) {
+    print('Erreur mise à jour temps réflexion atomique: $e');
+  }
+}
   /// Mettre à jour le temps global de la partie
   static Future<void> updateGameTime(String gameId, int timeRemaining) async {
     try {
@@ -191,45 +193,6 @@ class GameService {
     }
   }
 
-/// Mettre à jour les tours manqués consécutifs - VERSION CORRIGÉE
-static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int> consecutiveMissedTurns) async {
-  try {
-    print('🔄 updateConsecutiveMissedTurns appelé');
-    print('📊 Tours manqués reçus: $consecutiveMissedTurns');
-    
-    await gamesCollection.doc(gameId).update({
-      'consecutiveMissedTurns': consecutiveMissedTurns,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-    
-    // 🎯 RÉCUPÉRER LA PARTIE POUR VÉRIFICATION
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) return;
-    
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    print('📊 Tours manqués dans Firestore: ${game.consecutiveMissedTurns}');
-    
-    // Vérifier si un joueur a manqué 3 tours
-    for (final entry in consecutiveMissedTurns.entries) {
-      print('🔍 Vérification joueur ${entry.key}: ${entry.value}/3 tours manqués');
-      
-      if (entry.value >= 3) {
-        print('🎯🚨 3 TOURS MANQUÉS DÉTECTÉS pour le joueur: ${entry.key}');
-        print('🎯🚨 Déclenchement fin de partie...');
-        
-        // 🎯 IDENTIFIER LE JOUEUR QUI A MANQUÉ LES TOURS
-        final playerWhoMissed = entry.key;
-        await _finishGameByMissedTurns(gameId, playerWhoMissed);
-        return; // 🚫 ON S'ARRÊTE APRÈS AVOIR TRAITÉ LE PREMIER JOUEUR À 3 TOURS
-      }
-    }
-    
-    print('✅ Aucun joueur n\'a atteint 3 tours manqués');
-  } catch (e) {
-    print('❌ Erreur mise à jour tours manqués: $e');
-  }
-}
-  
   // ============================================================
   // GESTION DES POINTS ET CARRÉS
   // ============================================================
@@ -280,60 +243,61 @@ static Future<void> updateConsecutiveMissedTurns(String gameId, Map<String, int>
   // GESTION DE LA FIN DE PARTIE - CORRECTIONS APPLIQUÉES
   // ============================================================
 
-/// Marquer la partie comme terminée avec raison
+/// Marquer la partie comme terminée avec raison - AVEC PROTECTION SUPPLÉMENTAIRE
 static Future<void> finishGameWithReason(String gameId, {String? winnerId, required GameEndReason endReason}) async {
   try {
     print('🎯 Début finishGameWithReason: $gameId, winner: $winnerId, raison: $endReason');
+
     
-    // 🎯 CORRECTION: TOUT FAIRE EN UNE SEULE OPÉRATION ATOMIQUE
+    // 🛡️ VÉRIFIER SI LA PARTIE EST DÉJÀ TERMINÉE
+    final gameDoc = await gamesCollection.doc(gameId).get();
+    if (!gameDoc.exists) {
+      print('❌ Partie non trouvée: $gameId');
+      return;
+    }
+    
+    final existingGame = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+    if (existingGame.status == GameStatus.finished) {
+      print('🛡️ Partie déjà terminée - IGNORÉ');
+      return;
+    }
+    
     final updates = {
       'status': GameStatus.finished.toString(),
       'finishedAt': DateTime.now().millisecondsSinceEpoch,
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
       'endReason': endReason.toString(),
-      'winnerId': winnerId, // 🎯 TOUJOURS définir winnerId (même si null)
+      'winnerId': winnerId,
     };
 
     print('📝 Mise à jour Firestore: $updates');
     
-    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
+    // Mettre à jour la partie
     await gamesCollection.doc(gameId).update(updates);
     print('✅ Partie terminée dans Firestore avec winnerId: $winnerId');
 
-    // 🎯 ATTENDRE QUE FIRESTORE SYNCHRONISE
-    await Future.delayed(Duration(milliseconds: 1000));
+    // Attendre un peu pour la synchronisation
+    await Future.delayed(Duration(milliseconds: 500));
     
-    // 🎯 MAINTENANT RÉCUPÉRER LA PARTIE MISE À JOUR
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) {
-      print('❌ Partie non trouvée après mise à jour: $gameId');
-      return;
-    }
-
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    
-    // 🎯 VÉRIFICATION DES DONNÉES MISE À JOUR
-    print('🔍 Vérification après mise à jour:');
-    print('  - status: ${game.status}');
-    print('  - winnerId: ${game.winnerId}');
-    print('  - endReason: ${game.endReason}');
+    // Récupérer la partie mise à jour
+    final updatedGameDoc = await gamesCollection.doc(gameId).get();
+    final game = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
     
     if (game.status != GameStatus.finished) {
       print('❌ ERREUR: Partie pas encore terminée après update!');
       return;
     }
 
-    // SAUVEGARDER LES RÉSULTATS
-    print('💾 Sauvegarde résultats pour ${game.players.length} joueurs');
-    
+    // Mettre à jour les statuts des joueurs
     for (final playerId in game.players) {
       if (!playerId.startsWith('ai_')) {
         await _updatePlayerGameStatus(playerId, false, null);
       }
     }
     
-    await _saveGameResults(game);
-    print('✅ Tous les résultats sauvegardés pour partie $gameId');
+    // Mettre à jour les statistiques
+    await _updatePlayerStatsFromGame(game);
+    print('✅ Toutes les stats mises à jour pour partie $gameId');
     
   } catch (e) {
     print('❌ Erreur fin de partie: $e');
@@ -449,106 +413,6 @@ static Future<void> finishGameWithReason(String gameId, {String? winnerId, requi
       print('❌ Erreur fin de partie par grille pleine: $e');
     }
   }
-
-/// Fin de partie par tours manqués - VERSION COMPLÈTEMENT CORRIGÉE
-static Future<void> _finishGameByMissedTurns(String gameId, String playerWhoMissed) async {
-  try {
-    print('🎯 DÉBUT _finishGameByMissedTurns pour $playerWhoMissed');
-    
-    // 🎯 RÉCUPÉRER LA PARTIE ACTUALISÉE
-    final gameDoc = await gamesCollection.doc(gameId).get();
-    if (!gameDoc.exists) {
-      print('❌ Partie non trouvée: $gameId');
-      return;
-    }
-
-    final game = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
-    
-    // 🚫 VÉRIFIER QUE LA PARTIE N'EST PAS DÉJÀ TERMINÉE
-    if (game.status == GameStatus.finished) {
-      print('ℹ️ Partie déjà terminée: $gameId');
-      return;
-    }
-
-    print('🔍 État de la partie AVANT transfert:');
-    print('  - Player1 (${game.player1Id}): ${game.scores[game.player1Id]} points');
-    print('  - Player2 (${game.player2Id}): ${game.scores[game.player2Id]} points');
-    print('  - Joueur qui a manqué: $playerWhoMissed');
-
-    // 🎯 IDENTIFIER LE GAGNANT (l'adversaire)
-    final winnerId = playerWhoMissed == game.player1Id ? game.player2Id : game.player1Id;
-    
-    if (winnerId == null) {
-      print('❌ Impossible de déterminer le gagnant');
-      return;
-    }
-
-    // 🎯 CALCULER LES NOUVEAUX SCORES
-    final loserScore = game.scores[playerWhoMissed] ?? 0;
-    final winnerScore = game.scores[winnerId] ?? 0;
-    final newWinnerScore = winnerScore + loserScore + 1;
-    
-    print('💰 CALCUL SCORES:');
-    print('  - Score gagnant initial: $winnerScore');
-    print('  - Score perdant: $loserScore');
-    print('  - Score gagnant final: $newWinnerScore (avec bonus +1)');
-
-    // 🎯 CRÉER LES SCORES FINAUX
-    final finalScores = {
-      winnerId: newWinnerScore,
-      playerWhoMissed: 0, // 🎯 PERDANT À 0 POINTS
-    };
-
-    print('🏆 SCORES FINAUX: $finalScores');
-
-    // 🎯 METTRE À JOUR LA PARTIE EN UNE SEULE OPÉRATION ATOMIQUE
-    final updateData = {
-      'scores': finalScores,
-      'status': GameStatus.finished.toString(),
-      'winnerId': winnerId,
-      'endReason': GameEndReason.consecutiveMissedTurns.toString(),
-      'finishedAt': DateTime.now().millisecondsSinceEpoch,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
-    };
-
-    print('📝 MISE À JOUR FIRESTORE: $updateData');
-
-    // 🎯 UNE SEULE OPÉRATION POUR TOUT METTRE À JOUR
-    await gamesCollection.doc(gameId).update(updateData);
-    print('✅ Partie mise à jour dans Firestore');
-
-    // 🎯 ATTENDRE LA SYNCHRONISATION PUIS RÉCUPÉRER LA PARTIE MISE À JOUR
-    await Future.delayed(Duration(milliseconds: 500));
-    
-    final updatedGameDoc = await gamesCollection.doc(gameId).get();
-    final updatedGame = Game.fromMap(updatedGameDoc.data() as Map<String, dynamic>);
-    
-    print('🔍 État de la partie APRÈS transfert:');
-    print('  - Player1 (${updatedGame.player1Id}): ${updatedGame.scores[updatedGame.player1Id]} points');
-    print('  - Player2 (${updatedGame.player2Id}): ${updatedGame.scores[updatedGame.player2Id]} points');
-    print('  - Status: ${updatedGame.status}');
-    print('  - Gagnant: ${updatedGame.winnerId}');
-
-    for (final playerId in game.players) {
-      if (!playerId.startsWith('ai_')) {
-        await _updatePlayerGameStatus(playerId, false, null);
-      }
-    }
-
-    // 🎯 SAUVEGARDER LES RÉSULTATS AVEC LA PARTIE MISE À JOUR
-    if (updatedGame.status == GameStatus.finished) {
-      await _saveGameResults(updatedGame);
-      print('✅ Résultats sauvegardés avec les scores transférés');
-    } else {
-      print('❌ ERREUR: La partie n\'est pas marquée comme terminée après update!');
-    }
-
-  } catch (e) {
-    print('❌ Erreur critique dans _finishGameByMissedTurns: $e');
-    print('❌ Stack trace: ${e.toString()}');
-  }
-}
-
 
   // ============================================================
   // RÉCUPÉRATION DES PARTIES - STREAMS OPTIMISÉS
@@ -697,7 +561,8 @@ static Future<void> sendMatchRequest(MatchRequest request) async {
   }
 }
 
-/// Accepter une demande de match avec userId - AVEC LOADER
+
+/// Accepter une demande de match avec userId - AVEC LOADER ET VÉRIFICATIONS
 static Future<Game> acceptMatchRequest(String requestId, String currentUserId) async {
   try {
     print('🔄 Début acceptation demande $requestId par $currentUserId');
@@ -714,6 +579,45 @@ static Future<Game> acceptMatchRequest(String requestId, String currentUserId) a
     if (GameService.isMatchRequestExpired(request)) {
       throw Exception('Cette demande de match a expiré');
     }
+
+    // 🆕 VÉRIFICATION 1: EST-CE QUE LE JOUEUR EST ENCORE EN LIGNE ?
+    final currentPlayer = await getPlayer(request.fromUserId);
+    if (currentPlayer != null && !currentPlayer.isOnline) {
+      throw Exception('Le joueur ${currentPlayer.username} n\'est plus en ligne');
+    }
+
+    // 🆕 VÉRIFICATION 2: EST-CE QUE LE JOUEUR EST DÉJÀ DANS UNE PARTIE ?
+    if (currentPlayer != null && currentPlayer.inGame) {
+      final currentGameId = currentPlayer.currentGameId;
+      if (currentGameId != null && currentGameId.isNotEmpty) {
+        // Vérifier si la partie est encore active
+        final gameDoc = await gamesCollection.doc(currentGameId).get();
+        if (gameDoc.exists) {
+          final existingGame = Game.fromMap(gameDoc.data() as Map<String, dynamic>);
+          if (existingGame.status == GameStatus.playing) {
+            throw Exception('${currentPlayer.username} est déjà dans une partie en cours');
+          }
+        }
+      }
+    }
+
+    // 🆕 VÉRIFICATION 3: EST-CE QUE MOI-MÊME JE SUIS DÉJÀ DANS UNE PARTIE ?
+    final myPlayer = await getPlayer(currentUserId);
+    if (myPlayer != null && myPlayer.inGame) {
+      final myCurrentGameId = myPlayer.currentGameId;
+      if (myCurrentGameId != null && myCurrentGameId.isNotEmpty) {
+        // Vérifier si ma partie est encore active
+        final myGameDoc = await gamesCollection.doc(myCurrentGameId).get();
+        if (myGameDoc.exists) {
+          final myExistingGame = Game.fromMap(myGameDoc.data() as Map<String, dynamic>);
+          if (myExistingGame.status == GameStatus.playing) {
+            throw Exception('Vous êtes déjà dans une partie en cours');
+          }
+        }
+      }
+    }
+
+    print('✅ Toutes les vérifications passées - Création de la partie...');
 
     // 🆕 MARQUER LA DEMANDE COMME ACCEPTÉE
     await matchRequestsCollection.doc(requestId).update({
@@ -769,8 +673,8 @@ static Future<Game> acceptMatchRequest(String requestId, String currentUserId) a
     print('❌ Erreur acceptation demande: $e');
     throw Exception('Erreur acceptation demande: $e');
   }
-}
-  /// Refuser une demande de match avec userId
+}  /// Refuser une demande de match avec userId
+  
   static Future<void> rejectMatchRequest(String requestId, String currentUserId, {String reason = 'Refusé par le joueur'}) async {
     try {
       final requestDoc = await matchRequestsCollection.doc(requestId).get();
@@ -908,104 +812,24 @@ static Stream<int> getPendingRequestsCount(String userId) {
 }
 
   // ============================================================
-  // GESTION DES RÉSULTATS ET STATISTIQUES - CORRECTIONS APPLIQUÉES
+  // GESTION DES STATISTIQUES DIRECTEMENT DEPUIS GAME
   // ============================================================
 
-  /// Sauvegarder le résultat d'une partie
-static Future<void> saveGameResult(GameResult result) async {
+/// Mettre à jour les statistiques des joueurs directement depuis le modèle Game
+/// Mettre à jour les statistiques des joueurs - AVEC PROTECTION ANTI-DOUBLONS
+static Future<void> _updatePlayerStatsFromGame(Game game) async {
   try {
-    print('💾 Début sauvegarde GameResult pour ${result.userId}: ${result.outcome}');
+    print('💾 Début mise à jour stats depuis Game pour partie ${game.id}');
     
-    // GÉNÉRER UN ID UNIQUE POUR LE RÉSULTAT
-    final resultId = generateId();
-    
-    await gameResultsCollection.doc(resultId).set(result.toMap());
-    
-    // METTRE À JOUR LES STATS (optionnel)
-    try {
-      await _updatePlayerStats(result);
-    } catch (e) {
-      print('⚠️ Erreur stats non critique: $e');
-    }
-    
-    print('✅ GameResult sauvegardé avec succès pour ${result.userId}');
-  } catch (e) {
-    print('❌ Erreur sauvegarde GameResult: $e');
-    // NE PAS RELANCER POUR ÉVITER DE BLOQUER LE PROCESSUS
-  }
-}
-
-  /// Mettre à jour les statistiques du joueur
-  static Future<void> _updatePlayerStats(GameResult result) async {
-    try {
-      print('📊 Mise à jour stats pour ${result.userId}');
-      final userDoc = await usersCollection.doc(result.userId).get();
-      if (!userDoc.exists) {
-        print('❌ Utilisateur non trouvé: ${result.userId}');
-        return;
-      }
-
-      final player = Player.fromMap(userDoc.data() as Map<String, dynamic>);
-      final isWin = result.outcome == GameOutcome.win;
-      final isDraw = result.outcome == GameOutcome.draw;
-
-      final updates = <String, dynamic>{
-        'totalPoints': player.totalPoints + result.pointsScored,
-        'gamesPlayed': FieldValue.increment(1),
-        'gamesWon': FieldValue.increment(isWin ? 1 : 0),
-        'gamesLost': FieldValue.increment(!isWin && !isDraw ? 1 : 0),
-        'gamesDraw': FieldValue.increment(isDraw ? 1 : 0),
-        'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
-      };
-
-      if (isWin) {
-        final newWinStreak = (player.stats.winStreak) + 1;
-        updates['stats.winStreak'] = newWinStreak;
-        if (newWinStreak > player.stats.bestWinStreak) {
-          updates['stats.bestWinStreak'] = newWinStreak;
-        }
-        print('🏆 Victoire détectée - Série: $newWinStreak');
-      } else {
-        updates['stats.winStreak'] = 0;
-        print('💔 Défaite ou nul - Série remise à 0');
-      }
-
-      if (result.pointsScored > player.stats.bestGamePoints) {
-        updates['stats.bestGamePoints'] = result.pointsScored;
-        print('🎯 Nouveau record de points: ${result.pointsScored}');
-      }
-
-      final now = DateTime.now();
-      // updates['stats.dailyPoints'] = player.stats.dailyPoints + result.pointsScored;
-      // updates['stats.weeklyPoints'] = player.stats.weeklyPoints + result.pointsScored;
-      // updates['stats.monthlyPoints'] = player.stats.monthlyPoints + result.pointsScored;
-
-      await usersCollection.doc(result.userId).update(updates);
-      print('✅ Stats mises à jour pour ${result.userId}');
-    } catch (e) {
-      print('❌ Erreur mise à jour stats: $e');
-    }
-  }
-
-/// Sauvegarder les résultats de tous les joueurs d'une partie
-static Future<void> _saveGameResults(Game game) async {
-  try {
-    print('💾 Début sauvegarde résultats pour partie ${game.id}');
-    
-    // 🎯 AJOUT DE LOGS POUR DEBUG
-    print('🔍 Données de la partie:');
-    print('  - winnerId: ${game.winnerId}');
-    print('  - player1Id: ${game.player1Id}, score: ${game.scores[game.player1Id]}');
-    print('  - player2Id: ${game.player2Id}, score: ${game.scores[game.player2Id]}');
-    print('  - endReason: ${game.endReason}');
-    print('  - status: ${game.status}');
-    
-    // VÉRIFIER QUE LA PARTIE A BIEN UN WINNER_ID
     final winnerId = game.winnerId;
     final isDraw = winnerId == null;
     
-    print('🏆 WinnerId: $winnerId, Draw: $isDraw');
+    print('🔍 Données de la partie:');
+    print('  - winnerId: $winnerId');
+    print('  - player1Id: ${game.player1Id}, score: ${game.scores[game.player1Id]}');
+    print('  - player2Id: ${game.player2Id}, score: ${game.scores[game.player2Id]}');
     
+    // Pour chaque joueur humain
     for (final playerId in game.players) {
       if (playerId.startsWith('ai_')) {
         print('🤖 Ignoré IA: $playerId');
@@ -1014,40 +838,144 @@ static Future<void> _saveGameResults(Game game) async {
 
       final playerScore = game.scores[playerId] ?? 0;
       
-      // DÉTERMINER L'OUTCOME CORRECTEMENT
-      final GameOutcome outcome;
+      // Déterminer résultat
+      final bool isWin, isLoss, isDrawOutcome;
+      
       if (isDraw) {
-        outcome = GameOutcome.draw;
+        isWin = false;
+        isLoss = false;
+        isDrawOutcome = true;
+        print('🤝 Match nul pour $playerId');
       } else if (playerId == winnerId) {
-        outcome = GameOutcome.win;
+        isWin = true;
+        isLoss = false;
+        isDrawOutcome = false;
+        print('🏆 Victoire pour $playerId');
       } else {
-        outcome = GameOutcome.loss;
+        isWin = false;
+        isLoss = true;
+        isDrawOutcome = false;
+        print('💔 Défaite pour $playerId');
       }
 
-      print('👤 Traitement joueur $playerId: score=$playerScore, outcome=$outcome');
+      print('👤 Traitement joueur $playerId: score=$playerScore, win=$isWin, loss=$isLoss, draw=$isDrawOutcome');
 
-      final result = GameResult(
-        userId: playerId,
-        gameId: game.id,
-        pointsScored: playerScore,
-        outcome: outcome,
-        playedAt: game.finishedAt ?? DateTime.now(),
-        opponentId: _getOpponentId(game, playerId),
+      // 🛡️ METTRE À JOUR LES STATS AVEC VÉRIFICATION
+      await _updateSinglePlayerStatsSafe(
+        playerId: playerId,
+        score: playerScore,
+        isWin: isWin,
+        isLoss: isLoss,
+        isDraw: isDrawOutcome,
         gridSize: game.gridSize,
+        opponentId: _getOpponentId(game, playerId),
+        gameId: game.id,
       );
-
-      await saveGameResult(result);
     }
     
-    print('✅ Tous les résultats sauvegardés pour partie ${game.id}');
-        // 🎯 METTRE À JOUR LES RANGS APRÈS LA PARTIE
-    await RankingService.updateRanksAfterGame(game.players);
+    print('✅ Toutes les stats mises à jour pour partie ${game.id}');
     
+    // Mettre à jour les rangs
+    await RankingService.updateRanksAfterGame(game.players);
     print('✅ Rangs mis à jour après la partie');
   } catch (e) {
-    print('❌ Erreur sauvegarde résultats: $e');
+    print('❌ Erreur mise à jour stats depuis Game: $e');
   }
-} 
+}
+
+/// Mettre à jour les statistiques d'un joueur avec vérification anti-doublons
+static Future<void> _updateSinglePlayerStatsSafe({
+  required String playerId,
+  required int score,
+  required bool isWin,
+  required bool isLoss,
+  required bool isDraw,
+  required int gridSize,
+  required String? opponentId,
+  required String gameId,
+}) async {
+  try {
+    print('📊 Mise à jour stats SAFE pour $playerId (game: $gameId)');
+    
+    // 🛡️ UTILISER UNE TRANSACTION POUR ÉVITER LES CONCURRENCES
+    await _firestore.runTransaction((transaction) async {
+      final userDoc = await transaction.get(usersCollection.doc(playerId));
+      if (!userDoc.exists) {
+        print('❌ Utilisateur non trouvé: $playerId');
+        return;
+      }
+
+      final player = Player.fromMap(userDoc.data() as Map<String, dynamic>);
+      
+      // 🛡️ VÉRIFIER SI CETTE PARTIE A DÉJÀ ÉTÉ TRAITÉE
+      if (player.lastProcessedGame == gameId) {
+        print('🛡️ Partie $gameId déjà traitée pour $playerId - IGNORÉ');
+        return;
+      }
+      
+      print('✅ Nouvelle partie à traiter pour $playerId');
+
+      // Calculer les nouvelles stats
+      final currentGamesPlayed = player.gamesPlayed;
+      final currentWins = player.gamesWon;
+      final currentLosses = player.gamesLost;
+      final currentDraws = player.gamesDraw;
+      final currentWinStreak = player.stats.winStreak;
+      final currentBestStreak = player.stats.bestWinStreak;
+      final currentBestPoints = player.stats.bestGamePoints;
+      
+      final newGamesPlayed = currentGamesPlayed + 1;
+      final newWins = currentWins + (isWin ? 1 : 0);
+      final newLosses = currentLosses + (isLoss ? 1 : 0);
+      final newDraws = currentDraws + (isDraw ? 1 : 0);
+      
+      // Gestion de la série de victoires
+      int newWinStreak;
+      int newBestStreak = currentBestStreak;
+      
+      if (isWin) {
+        newWinStreak = currentWinStreak + 1;
+        if (newWinStreak > currentBestStreak) {
+          newBestStreak = newWinStreak;
+          print('🎯 Nouvelle meilleure série: $newBestStreak');
+        }
+        print('📈 Série de victoires: $currentWinStreak → $newWinStreak');
+      } else {
+        newWinStreak = 0;
+        print('📉 Série remise à 0');
+      }
+      
+      // Vérification du record de points
+      final newBestPoints = score > currentBestPoints ? score : currentBestPoints;
+      if (score > currentBestPoints) {
+        print('🎯 Nouveau record de points: $score (ancien: $currentBestPoints)');
+      }
+      
+      // Préparer les mises à jour
+      final updates = <String, dynamic>{
+        'totalPoints': player.totalPoints + score,
+        'gamesPlayed': newGamesPlayed,
+        'gamesWon': newWins,
+        'gamesLost': newLosses,
+        'gamesDraw': newDraws,
+        'stats.winStreak': newWinStreak,
+        'stats.bestWinStreak': newBestStreak,
+        'stats.bestGamePoints': newBestPoints,
+        'lastProcessedGame': gameId, // 🛡️ MARQUER COMME TRAITÉE
+        'lastLoginAt': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // Appliquer les mises à jour
+      transaction.update(usersCollection.doc(playerId), updates);
+      print('✅ Stats mises à jour pour $playerId');
+      print('📊 Résumé: Parties=$newGamesPlayed, Victoires=$newWins, Défaites=$newLosses, Nuls=$newDraws');
+    });
+    
+  } catch (e) {
+    print('❌ Erreur mise à jour stats joueur SAFE: $e');
+  }
+}
+
   // ============================================================
   // FONCTIONS UTILITAIRES
   // ============================================================
@@ -1287,5 +1215,7 @@ static Stream<Map<String, dynamic>> getQuickMessages(String gameId) {
         return {};
       });
 }
+
+
 
 }

@@ -3,9 +3,12 @@ import 'package:jeu_carre/screens/home_screen/home_screen.dart';
 import 'package:jeu_carre/screens/match_screen/match_screen.dart';
 import 'package:jeu_carre/screens/feedback_screen/feedback_screen.dart';
 import 'package:jeu_carre/screens/profile_screen/profile_screen.dart';
+//import 'package:jeu_carre/screens/stats_migration_screen.dart'; // Nouvelle page
 
 class NavigationScreen extends StatefulWidget {
-  const NavigationScreen({super.key});
+  final int initialIndex;
+
+  const NavigationScreen({super.key, this.initialIndex = 0});
 
   @override
   State<NavigationScreen> createState() => _NavigationScreenState();
@@ -14,11 +17,18 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
+
   final List<Widget> _pages = [
     HomeScreen(),
     const MatchScreen(),
     const FeedbackScreen(),
     const ProfileScreen(),
+    //const StatsMigrationScreen(), // Nouvelle page à l'index 4
   ];
 
   void _onItemTapped(int index) {
@@ -57,6 +67,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
             icon: Icon(Icons.person),
             label: 'Profil',
           ),
+          // BottomNavigationBarItem( // Nouvel item
+          //   icon: Icon(Icons.settings_backup_restore),
+          //   label: 'Admin',
+          // ),
         ],
       ),
     );

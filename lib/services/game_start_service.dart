@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:jeu_carre/models/ai_player.dart';
 import 'package:jeu_carre/models/game_model.dart';
 import 'package:jeu_carre/screens/game_screen/game_screen.dart';
+import 'package:jeu_carre/screens/loading_screen.dart';
 import 'package:jeu_carre/services/game_service.dart';
 
 class GameStartService {
@@ -14,8 +15,11 @@ class GameStartService {
 
   StreamSubscription? _activeGamesSubscription;
   BuildContext? _context;
+
   String? _currentUserId;
+
   bool _isAlreadyInGame = false;
+  bool _loadingScreenShown = false;
 
   void initialize(BuildContext context) {
     _context = context;
@@ -23,91 +27,106 @@ class GameStartService {
     _startListeningToActiveGames();
   }
 
+  // ---------------------------------------------------------
+  // 🔥 ÉCOUTE DES PARTIES EN COURS
+  // ---------------------------------------------------------
   void _startListeningToActiveGames() {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-
     _activeGamesSubscription?.cancel();
-    _activeGamesSubscription = GameService.getMyActiveGames(currentUser.uid).listen((games) {
+    _activeGamesSubscription =
+        GameService.getMyActiveGames(currentUser.uid).listen((games) {
 
-      // Filtrer les parties en cours où l'utilisateur est présent
-      final activeGames = games.where((game) => 
-        game.status == GameStatus.playing &&
-        game.players.contains(currentUser.uid) &&
-        game.startedAt != null // La partie a vraiment commencé
-      ).toList();
+      final activeGames = games.where((g) =>
+          g.status == GameStatus.playing &&
+          g.players.contains(currentUser.uid) &&
+          g.startedAt != null).toList();
 
+      if (activeGames.isEmpty) return;
 
-      if (activeGames.isNotEmpty && !_isAlreadyInGame) {
-        // Prendre la partie la plus récente
-        final latestGame = activeGames.first;
-        _navigateToGame(latestGame);
-      }
+      final game = activeGames.first;
+
+      // 🟡 Déjà dans la partie → ne rien faire
+      if (_isAlreadyInGame) return;
+
+      // 🟢 Afficher l'écran de loading
+      _showLoadingScreen(game);
+
+      // Ensuite → navigation vers l'écran de jeu
+      _navigateToGame(game);
+
     }, onError: (error) {
-      print('❌ Erreur écoute parties actives: $error');
+      print("❌ Erreur écoute parties actives: $error");
     });
   }
 
-  void _navigateToGame(Game game) {
-    if (_context == null || !_context!.mounted) {
-      print('❌ Context non disponible pour navigation');
-      return;
-    }
+  // ---------------------------------------------------------
+  // 🟢 AFFICHER LE LOADING SCREEN EXACTEMENT COMME LA NOTIFICATION
+  // ---------------------------------------------------------
+  void _showLoadingScreen(Game game) {
+    if (_context == null || !_context!.mounted) return;
+    if (_loadingScreenShown) return;
 
-    // Vérifier si nous sommes déjà sur un écran de jeu
-    final currentRoute = ModalRoute.of(_context!)?.settings.name;
-    if (currentRoute?.contains('GameScreen') == true) {
-      return;
-    }
+    _loadingScreenShown = true;
 
-    try {
-      
-      // Marquer que nous sommes en jeu
-      _isAlreadyInGame = true;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(_context!).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => GameScreen(
-              gridSize: game.gridSize,
-              isAgainstAI: game.isAgainstAI,
-              aiDifficulty: _getAIDifficulty(game),
-              gameDuration: game.gameDuration,
-              reflexionTime: game.reflexionTime,
-              opponentId: _getOpponentId(game),
-              existingGame: game,
-            ),
-          ),
-          (route) => route.isFirst, // Garder seulement la première route
-        );
-        
-      });
-    } catch (e) {
-      _isAlreadyInGame = false;
-    }
+    Navigator.push(
+      _context!,
+      MaterialPageRoute(
+        builder: (_) => GameLoadingScreen(
+          opponentName: _getOpponentName(game),
+          gridSize: game.gridSize,
+        ),
+      ),
+    );
   }
 
+  // ---------------------------------------------------------
+  // 🔥 ENTRÉE DANS L'ÉCRAN DE JEU
+  // ---------------------------------------------------------
+  void _navigateToGame(Game game) {
+    if (_context == null || !_context!.mounted) return;
+
+    _isAlreadyInGame = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(_context!).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => GameScreen(
+            gridSize: game.gridSize,
+            isAgainstAI: game.isAgainstAI,
+            aiDifficulty: _getAIDifficulty(game),
+            gameDuration: game.gameDuration,
+            reflexionTime: game.reflexionTime,
+            opponentId: _getOpponentId(game),
+            existingGame: game,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    });
+  }
+
+  // ---------------------------------------------------------
+  // 🔧 UTILITAIRES
+  // ---------------------------------------------------------
   String? _getOpponentId(Game game) {
     if (_currentUserId == null) return null;
-    
-    if (game.isAgainstAI) {
-      return null;
-    }
-    
-    // Retourner l'ID de l'autre joueur
-    final opponent = game.players.firstWhere(
-      (playerId) => playerId != _currentUserId,
-      orElse: () => '',
+    if (game.isAgainstAI) return null;
+
+    return game.players.firstWhere(
+      (id) => id != _currentUserId,
+      orElse: () => "",
     );
-    
-    return opponent.isNotEmpty ? opponent : null;
+  }
+
+  String _getOpponentName(Game game) {
+    if (game.isAgainstAI) return "ShikakuBot";
+    return _getOpponentId(game) ?? "Adversaire";
   }
 
   AIDifficulty _getAIDifficulty(Game game) {
-    if (game.aiDifficulty == null) return AIDifficulty.intermediate;
-    
-    switch (game.aiDifficulty!.toLowerCase()) {
+    switch (game.aiDifficulty?.toLowerCase()) {
       case 'easy':
         return AIDifficulty.beginner;
       case 'hard':
@@ -119,14 +138,19 @@ class GameStartService {
     }
   }
 
+  // ---------------------------------------------------------
+  // RESET / STOP
+  // ---------------------------------------------------------
   void restart() {
     _isAlreadyInGame = false;
+    _loadingScreenShown = false;
     _startListeningToActiveGames();
   }
 
   void stop() {
     _activeGamesSubscription?.cancel();
     _isAlreadyInGame = false;
+    _loadingScreenShown = false;
   }
 
   void dispose() {
@@ -134,10 +158,11 @@ class GameStartService {
     _context = null;
     _currentUserId = null;
     _isAlreadyInGame = false;
+    _loadingScreenShown = false;
   }
 
-  // Méthode pour forcer la sortie du jeu (quand la partie se termine)
   void exitGame() {
     _isAlreadyInGame = false;
+    _loadingScreenShown = false;
   }
 }

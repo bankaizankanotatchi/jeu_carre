@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:jeu_carre/functions/photo_views.dart';
 import 'package:jeu_carre/models/player.dart';
 import 'package:jeu_carre/services/PlayerService.dart';
+import 'package:flutter_linkify/flutter_linkify.dart'; // AJOUT
+import 'package:url_launcher/url_launcher.dart'; // AJOUT
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});
@@ -50,6 +53,37 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         _allPlayersStream = PlayerService.getAllPlayersWithMessages();
       }
     });
+  }
+
+    // NOUVEAU : Widget pour afficher la réponse admin
+  void _showAdminResponseDialog(String playerId, String messageId, String playerName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AdminResponseDialog(
+        playerId: playerId,
+        messageId: messageId,
+        playerName: playerName,
+        onSuccess: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Réponse envoyée avec succès'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        },
+        onError: (error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur: $error'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _checkAdminStatus() async {
@@ -247,38 +281,130 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     );
   }
 
-  // NOUVEAU : Widget pour afficher la réponse admin
-  void _showAdminResponseDialog(String playerId, String messageId, String playerName) {
-    showDialog(
+  // MODIFIÉ : Fonction pour ouvrir ou copier un lien
+  Future<void> _onLinkTap(LinkableElement link) async {
+    final Uri url = Uri.parse(link.url);
+    
+    // Menu pour choisir entre ouvrir et copier
+    await showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AdminResponseDialog(
-        playerId: playerId,
-        messageId: messageId,
-        playerName: playerName,
-        onSuccess: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Réponse envoyée avec succès'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        },
-        onError: (error) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erreur: $error'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        },
+      backgroundColor: Color(0xFF2d0052),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Lien détecté',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 16),
+              // Lien affiché de manière sélectionnable
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color(0xFF1a0033),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Color(0xFF9c27b0)),
+                ),
+                child: SelectableText(
+                  link.url,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        // Copier dans le presse-papier
+                        await Clipboard.setData(ClipboardData(text: link.url));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Lien copié dans le presse-papier'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.content_copy, size: 20),
+                      label: Text('Copier'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF9c27b0),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        // Ouvrir le lien
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Impossible d\'ouvrir le lien'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      icon: Icon(Icons.open_in_new, size: 20),
+                      label: Text('Ouvrir'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF00d4ff),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Annuler',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  // MODIFICATION : Widget message avec photo de profil
+  // MODIFIÉ : Widget message avec liens cliquables
   Widget _buildMessageItem(UserMessage message, Player player, {bool isAdminView = false}) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final isCurrentUser = player.id == currentUser?.uid;
@@ -383,7 +509,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   SizedBox(height: 8),
                 ],
                 
-                // Message de l'utilisateur
+                // Message de l'utilisateur avec liens détectés
                 Container(
                   width: double.infinity,
                   padding: EdgeInsets.all(16),
@@ -433,12 +559,25 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         ],
                       ),
                       SizedBox(height: 8),
-                      Text(
-                        message.content,
+                      // MODIFIÉ : Utilisation de Linkify pour les liens
+                      Linkify(
+                        onOpen: _onLinkTap,
+                        text: message.content,
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 14,
                           height: 1.4,
+                        ),
+                        linkStyle: TextStyle(
+                          color: Color(0xFF00d4ff),
+                          decoration: TextDecoration.underline,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        options: LinkifyOptions(
+                          humanize: false,
+                          removeWww: false,
+                          defaultToHttps: true,
                         ),
                       ),
                       SizedBox(height: 6),
@@ -489,12 +628,25 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                           ],
                         ),
                         SizedBox(height: 6),
-                        Text(
-                          message.adminResponse!,
+                        // MODIFIÉ : Linkify pour la réponse admin aussi
+                        Linkify(
+                          onOpen: _onLinkTap,
+                          text: message.adminResponse!,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.9),
                             fontSize: 13,
                             height: 1.4,
+                          ),
+                          linkStyle: TextStyle(
+                            color: Color(0xFF00d4ff),
+                            decoration: TextDecoration.underline,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          options: LinkifyOptions(
+                            humanize: false,
+                            removeWww: false,
+                            defaultToHttps: true,
                           ),
                         ),
                       ],
